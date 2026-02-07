@@ -21,3 +21,6 @@ ln -sf src/remy ./remy
 ```bash
 ./remy  # Should ask for config file
 ```
+
+## LibTorch
+LibTorch installed in `libtorch/`. Test: `make -C tests libtorch-test && tests/libtorch-test`

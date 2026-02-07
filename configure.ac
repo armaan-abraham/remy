@@ -19,6 +19,14 @@ AS_IF([test x"$PROTOC" = x],
 # Checks for libraries.
 PKG_CHECK_MODULES([protobuf], [protobuf])
 
+# LibTorch configuration
+LIBTORCH_PREFIX="${PWD}/libtorch"
+LIBTORCH_CXXFLAGS="-I${LIBTORCH_PREFIX}/include -I${LIBTORCH_PREFIX}/include/torch/csrc/api/include"
+LIBTORCH_LIBS="-L${LIBTORCH_PREFIX}/lib -Wl,-rpath,${LIBTORCH_PREFIX}/lib -ltorch -ltorch_cpu -lc10"
+AC_SUBST([LIBTORCH_PREFIX])
+AC_SUBST([LIBTORCH_CXXFLAGS])
+AC_SUBST([LIBTORCH_LIBS])
+
 # Add compiler flags
 CXX11_FLAGS="-std=c++11 -pthread"
 AC_SUBST([CXX11_FLAGS])
