@@ -221,7 +221,7 @@ class OutputsDirectoryRemyCCPerformancePlotGenerator(SenderRunnerFilesMixin, Bas
 def add_plot(axes, link_speeds, norm_scores, **kwargs):
     """Adds a plot for the given link-packets-per-ms `link_ppts` and normalized
     scores `norm_scores` to the `axes`."""
-    return plt.semilogx(link_speeds, norm_scores, axes=axes, **kwargs)
+    return axes.semilogx(link_speeds, norm_scores, **kwargs)
 
 def process_replot_argument(replot_dir, results_dir):
     """Reads the args.json file in a results directory, copies it to an

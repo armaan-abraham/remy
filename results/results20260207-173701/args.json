@@ -1,0 +1,29 @@
+{
+  "args": {
+    "buffer_size": "inf",
+    "console_output_files": true,
+    "delay": 150.0,
+    "link_ppt": [
+      0.1,
+      100.0
+    ],
+    "mean_off": 1000.0,
+    "mean_on": 1000.0,
+    "nsenders": 2,
+    "num_points": 1000,
+    "originals": "originals",
+    "progress_end_char": "\r",
+    "remycc": [
+      "1x/cca.27"
+    ],
+    "replot": [],
+    "results_dir": null,
+    "sender": "",
+    "sender_runner": null
+  },
+  "git": {
+    "describe": "v0.1-33-g6f96589-dirty"
+  },
+  "machine-name": "ip-10-3-6-191",
+  "start-time": "Sat Feb  7 17:37:01 2026"
+}
