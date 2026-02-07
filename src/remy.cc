@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <vector>
 #include <string>
+#include <cctype>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -25,11 +26,31 @@ int main( int argc, char *argv[] )
   WhiskerImproverOptions whisker_options;
   RemyBuffers::ConfigRange input_config;
   string config_filename;
+  unsigned int starting_run = 0;  // Track starting run number from input file
 
   for ( int i = 1; i < argc; i++ ) {
     string arg( argv[ i ] );
     if ( arg.substr( 0, 3 ) == "if=" ) {
       string filename( arg.substr( 3 ) );
+      
+      // Extract run number from filename if it ends with a number
+      size_t last_dot = filename.rfind('.');
+      if (last_dot != string::npos && last_dot < filename.length() - 1) {
+        string suffix = filename.substr(last_dot + 1);
+        bool all_digits = true;
+        for (char c : suffix) {
+          if (!isdigit(c)) {
+            all_digits = false;
+            break;
+          }
+        }
+        if (all_digits && !suffix.empty()) {
+          starting_run = stoi(suffix) + 1;
+          printf("Detected run number %s from input file, will continue from run %u\n", 
+                 suffix.c_str(), starting_run);
+        }
+      }
+      
       int fd = open( filename.c_str(), O_RDONLY );
       if ( fd < 0 ) {
 	perror( "open" );
@@ -96,7 +117,7 @@ int main( int argc, char *argv[] )
 
   RatBreeder breeder( options, whisker_options );
 
-  unsigned int run = 0;
+  unsigned int run = starting_run;
 
   printf( "#######################\n" );
   printf( "Evaluator simulations will run for %d ticks\n",
