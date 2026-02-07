@@ -5,13 +5,14 @@
 #SBATCH --time=150:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=32
-#SBATCH --mem=32G
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=4G
 #SBATCH --output=/iris/u/armaana/jobs/logs/remy_%j.out
 #SBATCH --error=/iris/u/armaana/jobs/logs/remy_%j.err
 
+
 # Constants - Configure these for your specific run
-WORK_DIR="/home/ubuntu/remy"
+WORK_DIR="/iris/u/armaana/remy"
 OUTPUT_DIR="1x"
 CONFIG_FILE="link-1x.cfg"
 OUTPUT_PREFIX="cca"
