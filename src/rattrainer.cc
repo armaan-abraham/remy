@@ -1,6 +1,8 @@
 #include <cstdio>
 #include <vector>
 #include <string>
+#include <future>
+#include <mutex>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -23,25 +25,56 @@ double collect_experience( RatBrain & brain,
                            const vector<NetConfig> & configs,
                            const unsigned int tick_count )
 {
-  PRNG run_prng( prng_seed );
+  mutex brain_mutex;
+
+  /* Generate deterministic per-config PRNG seeds (each thread needs its own) */
+  PRNG seed_prng( prng_seed );
+  vector<unsigned int> seeds;
+  for ( size_t i = 0; i < configs.size(); i++ ) {
+    seeds.push_back( seed_prng() );
+  }
+
+  /* Launch a parallel async task for each config (mirrors breeder.cc pattern) */
+  vector<future<double>> futures;
+
+  for ( size_t i = 0; i < configs.size(); i++ ) {
+    futures.push_back(
+      async( launch::async,
+        [&brain, &configs, &brain_mutex, tick_count]
+        ( unsigned int seed, size_t idx ) -> double {
+          PRNG run_prng( seed );
+
+          /* Run simulation with NeuralRat senders */
+          Network< SenderGang<NeuralRat, TimeSwitchedSender<NeuralRat>>,
+                   SenderGang<NeuralRat, TimeSwitchedSender<NeuralRat>> >
+            network( NeuralRat( brain ), run_prng, configs[idx] );
+
+          network.run_simulation( tick_count );
+
+          double sim_utility = network.senders().utility();
+
+          /* Safely record experience into the shared replay buffer.
+             Inference (get_window_and_intersend) is read-only under NoGradGuard
+             and safe to call concurrently, but remember_episode writes to the
+             shared buffer and needs mutex protection. */
+          {
+            lock_guard<mutex> lock( brain_mutex );
+            auto & gang = network.mutable_senders().mutable_gang1();
+            for ( unsigned int j = 0; j < gang.count_senders(); j++ ) {
+              gang.mutable_sender( j ).mutable_inner_sender().episode_done( sim_utility );
+            }
+          }
+
+          return sim_utility;
+        },
+        seeds[i], i )
+    );
+  }
+
+  /* Collect results from all futures (blocks until each completes) */
   double total_score = 0;
-
-  for ( auto & config : configs ) {
-    /* Run simulation with NeuralRat senders */
-    Network< SenderGang<NeuralRat, TimeSwitchedSender<NeuralRat>>,
-             SenderGang<NeuralRat, TimeSwitchedSender<NeuralRat>> >
-      network( NeuralRat( brain ), run_prng, config );
-
-    network.run_simulation( tick_count );
-
-    double sim_utility = network.senders().utility();
-    total_score += sim_utility;
-
-    /* For each sender, call episode_done with the simulation utility */
-    auto & gang = network.mutable_senders().mutable_gang1();
-    for ( unsigned int i = 0; i < gang.count_senders(); i++ ) {
-      gang.mutable_sender( i ).mutable_inner_sender().episode_done( sim_utility );
-    }
+  for ( auto & f : futures ) {
+    total_score += f.get();
   }
 
   return total_score;
