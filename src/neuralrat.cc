@@ -6,23 +6,23 @@ WhiskerTree & NeuralRat::get_dummy_whiskers()
   return dummy;
 }
 
-NeuralRat::NeuralRat( RatTrainer & trainer )
+NeuralRat::NeuralRat( RatBrain & brain )
   : Rat( get_dummy_whiskers() ),
-    _trainer( trainer ),
+    _brain( brain ),
     _episode_observations()
 {
 }
 
 NeuralRat::NeuralRat( const NeuralRat & other )
   : Rat( other ),
-    _trainer( other._trainer ),
+    _brain( other._brain ),
     _episode_observations()  /* each copy starts with fresh observations */
 {
 }
 
 void NeuralRat::update_window_and_intersend()
 {
-  ActionResult result = _trainer.get_window_and_intersend( _memory, _the_window );
+  ActionResult result = _brain.get_window_and_intersend( _memory, _the_window );
   _the_window = result.the_window;
   _intersend_time = result.intersend_time;
   _episode_observations.push_back( result.obs_action );
@@ -30,6 +30,6 @@ void NeuralRat::update_window_and_intersend()
 
 void NeuralRat::episode_done( double utility )
 {
-  _trainer.store_episode( utility, _episode_observations );
+  _brain.remember_episode( utility, _episode_observations );
   _episode_observations.clear();
 }

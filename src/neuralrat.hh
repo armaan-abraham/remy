@@ -4,11 +4,11 @@
 #include <vector>
 
 #include "rat.hh"
-#include "rattrainer.hh"
+#include "ratbrain.hh"
 
 class NeuralRat : private Rat {
 private:
-  RatTrainer & _trainer;
+  RatBrain & _brain;
   std::vector<ObsAction> _episode_observations;
 
   static WhiskerTree & get_dummy_whiskers();
@@ -16,7 +16,7 @@ private:
   void update_window_and_intersend() override;
 
 public:
-  NeuralRat( RatTrainer & trainer );
+  NeuralRat( RatBrain & brain );
   NeuralRat( const NeuralRat & other );
 
   using Rat::packets_received;

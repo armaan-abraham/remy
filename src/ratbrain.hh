@@ -1,5 +1,5 @@
-#ifndef RATTRAINER_HH
-#define RATTRAINER_HH
+#ifndef RATBRAIN_HH
+#define RATBRAIN_HH
 
 #include <vector>
 #include <array>
@@ -64,7 +64,7 @@ struct PolicyValueNetImpl : torch::nn::Module {
 
 TORCH_MODULE(PolicyValueNet);
 
-class RatTrainer {
+class RatBrain {
 private:
   PolicyValueNet _network;
   std::shared_ptr<torch::optim::Adam> _optimizer;
@@ -81,11 +81,11 @@ private:
   size_t _buffer_count;
 
 public:
-  RatTrainer();
+  RatBrain();
 
   ActionResult get_window_and_intersend( const Memory & memory, int current_window );
-  void store_episode( double utility, const std::vector<ObsAction> & observations );
-  void train();
+  void remember_episode( double utility, const std::vector<ObsAction> & observations );
+  void learn();
 };
 
 #endif
