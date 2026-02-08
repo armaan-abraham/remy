@@ -150,65 +150,83 @@ void RatBrain::learn()
 {
   if ( _buffer_count < BATCH_SIZE ) return;
 
+  const long mini_batch_size = static_cast<long>( BATCH_SIZE / ACCUMULATION_STEPS );
+
   for ( size_t train_iter = 0; train_iter < UTD_RATIO; train_iter++ ) {
-    /* Sample random batch indices and use vectorized index_select */
+    /* Sample random batch indices for the full effective batch */
     auto indices = torch::randint( 0, static_cast<long>(_buffer_count),
                                    {static_cast<long>(BATCH_SIZE)}, torch::kLong );
 
-    auto obs_batch = _buf_obs.index_select( 0, indices ).to( _device );
-    auto utility_batch = _buf_utility.index_select( 0, indices ).to( _device );
-    auto old_log_prob_batch = _buf_old_log_prob.index_select( 0, indices ).to( _device );
-    auto action_wi_batch = _buf_action_wi.index_select( 0, indices ).to( _device );
-    auto action_wm_batch = _buf_action_wm.index_select( 0, indices ).to( _device );
-    auto action_is_batch = _buf_action_is.index_select( 0, indices ).to( _device );
-
-    /* Forward pass */
-    auto output = _network->forward( obs_batch );
-    auto logits_wi = get<0>( output );
-    auto logits_wm = get<1>( output );
-    auto logits_is = get<2>( output );
-    auto values = get<3>( output ).squeeze( 1 );
-
-    /* Compute new log probabilities for taken actions */
-    auto log_probs_wi = torch::log_softmax( logits_wi, 1 );
-    auto log_probs_wm = torch::log_softmax( logits_wm, 1 );
-    auto log_probs_is = torch::log_softmax( logits_is, 1 );
-
-    auto new_log_prob = log_probs_wi.gather( 1, action_wi_batch.unsqueeze( 1 ) ).squeeze( 1 )
-                      + log_probs_wm.gather( 1, action_wm_batch.unsqueeze( 1 ) ).squeeze( 1 )
-                      + log_probs_is.gather( 1, action_is_batch.unsqueeze( 1 ) ).squeeze( 1 );
-
-    /* Advantage: A(s) = G - V(s), with gamma=1 so G = episode utility */
-    auto advantage = utility_batch - values.detach();
-
-    /* PPO clipped surrogate loss */
-    auto ratio = torch::exp( new_log_prob - old_log_prob_batch );
-    auto surr1 = ratio * advantage;
-    auto surr2 = torch::clamp( ratio, 1.0 - PPO_EPSILON, 1.0 + PPO_EPSILON ) * advantage;
-    auto policy_loss = -torch::min( surr1, surr2 ).mean();
-
-    /* Value loss */
-    auto value_loss = torch::mse_loss( values, utility_batch );
-
-    /* Entropy bonus */
-    auto entropy_wi = -( torch::softmax( logits_wi, 1 ) * log_probs_wi ).sum( 1 );
-    auto entropy_wm = -( torch::softmax( logits_wm, 1 ) * log_probs_wm ).sum( 1 );
-    auto entropy_is = -( torch::softmax( logits_is, 1 ) * log_probs_is ).sum( 1 );
-    auto entropy = ( entropy_wi + entropy_wm + entropy_is ).mean();
-
-    /* Total loss */
-    auto loss = policy_loss + VALUE_LOSS_COEFF * value_loss - ENTROPY_COEFF * entropy;
-
     _optimizer->zero_grad();
-    loss.backward();
+
+    float accum_loss = 0, accum_entropy = 0, accum_value_loss = 0, accum_policy_loss = 0;
+
+    for ( size_t accum_step = 0; accum_step < ACCUMULATION_STEPS; accum_step++ ) {
+      /* Slice indices for this mini-batch and load to GPU */
+      auto mb_indices = indices.slice( 0,
+        accum_step * mini_batch_size, ( accum_step + 1 ) * mini_batch_size );
+
+      auto obs_batch = _buf_obs.index_select( 0, mb_indices ).to( _device );
+      auto utility_batch = _buf_utility.index_select( 0, mb_indices ).to( _device );
+      auto old_log_prob_batch = _buf_old_log_prob.index_select( 0, mb_indices ).to( _device );
+      auto action_wi_batch = _buf_action_wi.index_select( 0, mb_indices ).to( _device );
+      auto action_wm_batch = _buf_action_wm.index_select( 0, mb_indices ).to( _device );
+      auto action_is_batch = _buf_action_is.index_select( 0, mb_indices ).to( _device );
+
+      /* Forward pass */
+      auto output = _network->forward( obs_batch );
+      auto logits_wi = get<0>( output );
+      auto logits_wm = get<1>( output );
+      auto logits_is = get<2>( output );
+      auto values = get<3>( output ).squeeze( 1 );
+
+      /* Compute new log probabilities for taken actions */
+      auto log_probs_wi = torch::log_softmax( logits_wi, 1 );
+      auto log_probs_wm = torch::log_softmax( logits_wm, 1 );
+      auto log_probs_is = torch::log_softmax( logits_is, 1 );
+
+      auto new_log_prob = log_probs_wi.gather( 1, action_wi_batch.unsqueeze( 1 ) ).squeeze( 1 )
+                        + log_probs_wm.gather( 1, action_wm_batch.unsqueeze( 1 ) ).squeeze( 1 )
+                        + log_probs_is.gather( 1, action_is_batch.unsqueeze( 1 ) ).squeeze( 1 );
+
+      /* Advantage: A(s) = G - V(s), with gamma=1 so G = episode utility */
+      auto advantage = utility_batch - values.detach();
+
+      /* PPO clipped surrogate loss */
+      auto ratio = torch::exp( new_log_prob - old_log_prob_batch );
+      auto surr1 = ratio * advantage;
+      auto surr2 = torch::clamp( ratio, 1.0 - PPO_EPSILON, 1.0 + PPO_EPSILON ) * advantage;
+      auto policy_loss = -torch::min( surr1, surr2 ).mean();
+
+      /* Value loss */
+      auto value_loss = torch::mse_loss( values, utility_batch );
+
+      /* Entropy bonus */
+      auto entropy_wi = -( torch::softmax( logits_wi, 1 ) * log_probs_wi ).sum( 1 );
+      auto entropy_wm = -( torch::softmax( logits_wm, 1 ) * log_probs_wm ).sum( 1 );
+      auto entropy_is = -( torch::softmax( logits_is, 1 ) * log_probs_is ).sum( 1 );
+      auto entropy = ( entropy_wi + entropy_wm + entropy_is ).mean();
+
+      /* Scale loss by accumulation steps so gradients average correctly */
+      auto loss = ( policy_loss + VALUE_LOSS_COEFF * value_loss - ENTROPY_COEFF * entropy )
+                  / static_cast<double>( ACCUMULATION_STEPS );
+      loss.backward();
+
+      /* Track unscaled metrics for logging */
+      accum_loss += loss.item<float>() * ACCUMULATION_STEPS;
+      accum_entropy += entropy.item<float>();
+      accum_value_loss += value_loss.item<float>();
+      accum_policy_loss += policy_loss.item<float>();
+    }
+
     auto grad_norm = torch::nn::utils::clip_grad_norm_( _network->parameters(), MAX_GRAD_NORM );
     _optimizer->step();
 
     if ( train_iter == UTD_RATIO - 1 ) {
-      cerr << "learn: loss=" << loss.item<float>()
-           << " entropy=" << entropy.item<float>()
-           << " value_loss=" << value_loss.item<float>()
-           << " policy_loss=" << policy_loss.item<float>()
+      cerr << "learn: loss=" << accum_loss / ACCUMULATION_STEPS
+           << " entropy=" << accum_entropy / ACCUMULATION_STEPS
+           << " value_loss=" << accum_value_loss / ACCUMULATION_STEPS
+           << " policy_loss=" << accum_policy_loss / ACCUMULATION_STEPS
            << " grad_norm=" << grad_norm << endl;
     }
   }

@@ -30,6 +30,7 @@ constexpr size_t UTD_RATIO = 10;
 constexpr double VALUE_LOSS_COEFF = 1.0;
 constexpr double ENTROPY_COEFF = 0.005;
 constexpr double MAX_GRAD_NORM = 500.0;
+constexpr size_t ACCUMULATION_STEPS = 1;
 constexpr int HIDDEN_SIZE = 256;
 constexpr int NUM_HIDDEN_LAYERS = 2;
 
