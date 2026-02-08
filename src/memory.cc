@@ -6,6 +6,8 @@
 
 using namespace std;
 
+const unsigned int Memory::datasize;
+
 static const double alpha = 1.0 / 8.0;
 
 static const double slow_alpha = 1.0 / 256.0;

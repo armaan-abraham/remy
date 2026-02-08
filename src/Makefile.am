@@ -1,4 +1,4 @@
-AM_CPPFLAGS = $(CXX11_FLAGS) -I../protobufs
+AM_CPPFLAGS = $(CXX11_FLAGS) $(protobuf_CFLAGS) -I../protobufs
 AM_CXXFLAGS = $(PICKY_CXXFLAGS)
 LDADD = ../protobufs/libremyprotos.a -lm $(protobuf_LIBS)
 
@@ -42,7 +42,7 @@ inspect_simulationsdata_SOURCES = inspect-simulationsdata.cc
 rattrainer_SOURCES = $(common_source) ratbrain.hh ratbrain.cc \
 	neuralrat.cc neuralrat.hh \
 	rattrainer.cc
-rattrainer_CPPFLAGS = -std=c++17 -pthread -I../protobufs $(LIBTORCH_CXXFLAGS)
+rattrainer_CPPFLAGS = -std=c++17 -pthread $(protobuf_CFLAGS) -I../protobufs $(LIBTORCH_CXXFLAGS)
 rattrainer_CXXFLAGS = -Wall
 rattrainer_LDADD = $(LDADD) $(LIBTORCH_LIBS)
 

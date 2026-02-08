@@ -18,10 +18,17 @@ AS_IF([test x"$PROTOC" = x],
 
 # Checks for libraries.
 PKG_CHECK_MODULES([protobuf], [protobuf])
+# Protobuf 3.13.0 (matching LibTorch's bundled version) triggers -Weffc++; -isystem suppresses this
+protobuf_CFLAGS=$(echo "$protobuf_CFLAGS" | sed 's/-I/-isystem /g')
+# Extract -L path from protobuf_LIBS and embed as rpath
+protobuf_LIBDIR=$(echo "$protobuf_LIBS" | grep -o '\-L[[^ ]]*' | sed 's/^-L//')
+if test -n "$protobuf_LIBDIR"; then
+  protobuf_LIBS="$protobuf_LIBS -Wl,-rpath,$protobuf_LIBDIR"
+fi
 
 # LibTorch configuration
 LIBTORCH_PREFIX="${PWD}/libtorch"
-LIBTORCH_CXXFLAGS="-I${LIBTORCH_PREFIX}/include -I${LIBTORCH_PREFIX}/include/torch/csrc/api/include"
+LIBTORCH_CXXFLAGS="-isystem${LIBTORCH_PREFIX}/include -isystem${LIBTORCH_PREFIX}/include/torch/csrc/api/include"
 LIBTORCH_LIBS="-L${LIBTORCH_PREFIX}/lib -Wl,-rpath,${LIBTORCH_PREFIX}/lib -ltorch -ltorch_cpu -lc10"
 AC_SUBST([LIBTORCH_PREFIX])
 AC_SUBST([LIBTORCH_CXXFLAGS])

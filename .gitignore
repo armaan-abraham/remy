@@ -36,4 +36,5 @@ Makefile.in
 /graph/ratatouille
 /src/scoring-example
 /src/libtorch-test
-/libtorch
+/libtorch*
+/src/rattrainer
