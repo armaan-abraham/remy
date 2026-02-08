@@ -20,17 +20,17 @@ constexpr std::array<Axis, 4> ACTIVE_AXES = {
 constexpr int INPUT_DIM = ACTIVE_AXES.size();
 
 /* Training hyperparameters */
-constexpr size_t REPLAY_BUFFER_SIZE = 1e6;
-constexpr size_t BATCH_SIZE = 1024;
+constexpr size_t REPLAY_BUFFER_SIZE = 3e5;
+constexpr size_t BATCH_SIZE = 2048;
 constexpr double LEARNING_RATE = 3e-4;
 constexpr double PPO_EPSILON = 0.2;
 // Update-to-data ratio: number of training iterations after each experience
 // collection
 constexpr size_t UTD_RATIO = 50; 
-constexpr double VALUE_LOSS_COEFF = 0.5;
-constexpr double ENTROPY_COEFF = 0.01;
-constexpr double MAX_GRAD_NORM = 0.5;
-constexpr int HIDDEN_SIZE = 128;
+constexpr double VALUE_LOSS_COEFF = 1.0;
+constexpr double ENTROPY_COEFF = 0.005;
+constexpr double MAX_GRAD_NORM = 2.0;
+constexpr int HIDDEN_SIZE = 256;
 constexpr int NUM_HIDDEN_LAYERS = 2;
 
 /* Action space ranges (matching Whisker optimization settings in whisker.hh) */
