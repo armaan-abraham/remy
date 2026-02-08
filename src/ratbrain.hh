@@ -26,7 +26,7 @@ constexpr double LEARNING_RATE = 3e-4;
 constexpr double PPO_EPSILON = 0.2;
 // Update-to-data ratio: number of training iterations after each experience
 // collection
-constexpr size_t UTD_RATIO = 20; 
+constexpr size_t UTD_RATIO = 50; 
 constexpr double VALUE_LOSS_COEFF = 0.5;
 constexpr double ENTROPY_COEFF = 0.01;
 constexpr double MAX_GRAD_NORM = 0.5;
@@ -104,6 +104,7 @@ public:
   ActionResult get_window_and_intersend( const Memory & memory, int current_window );
   void remember_episode( double utility, const std::vector<ObsAction> & observations );
   void learn();
+  void save( const std::string & filename ) const;
 };
 
 #endif

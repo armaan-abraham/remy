@@ -18,9 +18,9 @@
 
 using namespace std;
 
-/* Number of times to replicate the config list per collect_experience call,
+/* Default number of times to replicate the config list per collect_experience call,
    so more total experience is collected per iteration. */
-const unsigned int NUM_CONFIG_EVALS = 8;
+const unsigned int DEFAULT_NUM_CONFIG_EVALS = 8;
 
 /* ---- Experience collection and main loop ---- */
 
@@ -39,12 +39,13 @@ double collect_experience( RatBrain & brain,
   }
 
   /* Launch a parallel async task for each config (mirrors breeder.cc pattern) */
+  size_t total_events = 0;
   vector<future<double>> futures;
 
   for ( size_t i = 0; i < configs.size(); i++ ) {
     futures.push_back(
       async( launch::async,
-        [&brain, &configs, &brain_mutex, tick_count]
+        [&brain, &configs, &brain_mutex, &total_events, tick_count]
         ( unsigned int seed, size_t idx ) -> double {
           PRNG run_prng( seed );
 
@@ -65,7 +66,7 @@ double collect_experience( RatBrain & brain,
             lock_guard<mutex> lock( brain_mutex );
             auto & gang = network.mutable_senders().mutable_gang1();
             for ( unsigned int j = 0; j < gang.count_senders(); j++ ) {
-              gang.mutable_sender( j ).mutable_inner_sender().episode_done( sim_utility );
+              total_events += gang.mutable_sender( j ).mutable_inner_sender().episode_done( sim_utility );
             }
           }
 
@@ -81,6 +82,8 @@ double collect_experience( RatBrain & brain,
     total_score += f.get();
   }
 
+  printf( "total_events = %zu\n", total_events );
+
   return total_score;
 }
 
@@ -88,6 +91,9 @@ int main( int argc, char *argv[] )
 {
   RemyBuffers::ConfigRange input_config;
   string config_filename;
+  string output_filename;
+  unsigned int save_every = 0;
+  unsigned int num_config_evals = DEFAULT_NUM_CONFIG_EVALS;
 
   for ( int i = 1; i < argc; i++ ) {
     string arg( argv[i] );
@@ -106,6 +112,12 @@ int main( int argc, char *argv[] )
         perror( "close" );
         exit( 1 );
       }
+    } else if ( arg.substr( 0, 3 ) == "of=" ) {
+      output_filename = string( arg.substr( 3 ) );
+    } else if ( arg.substr( 0, 11 ) == "save_every=" ) {
+      save_every = stoul( arg.substr( 11 ) );
+    } else if ( arg.substr( 0, 17 ) == "num_config_evals=" ) {
+      num_config_evals = stoul( arg.substr( 17 ) );
     }
   }
 
@@ -120,14 +132,20 @@ int main( int argc, char *argv[] )
   unsigned int tick_count = config_range.simulation_ticks;
 
   vector<NetConfig> configs;
-  configs.reserve( base_configs.size() * NUM_CONFIG_EVALS );
-  for ( unsigned int r = 0; r < NUM_CONFIG_EVALS; r++ ) {
+  configs.reserve( base_configs.size() * num_config_evals );
+  for ( unsigned int r = 0; r < num_config_evals; r++ ) {
     configs.insert( configs.end(), base_configs.begin(), base_configs.end() );
   }
 
   printf( "#######################\n" );
   printf( "Neural Rat Trainer\n" );
-  printf( "Evaluator simulations will run for %d ticks\n", tick_count );
+  printf( "  config file:       %s\n", config_filename.c_str() );
+  printf( "  output prefix:     %s\n", output_filename.empty() ? "(none)" : output_filename.c_str() );
+  printf( "  save_every:        %u\n", save_every );
+  printf( "  num_config_evals:  %u\n", num_config_evals );
+  printf( "  base configs:      %zu\n", base_configs.size() );
+  printf( "  total configs:     %zu\n", configs.size() );
+  printf( "  tick_count:        %u\n", tick_count );
   printf( "#######################\n" );
 
   RatBrain brain;
@@ -140,6 +158,12 @@ int main( int argc, char *argv[] )
     printf( "run = %u, score = %f\n", run, score );
 
     brain.learn();
+
+    if ( save_every > 0 && !output_filename.empty() && ( run % save_every == 0 ) ) {
+      char of[ 256 ];
+      snprintf( of, 256, "%s.%u", output_filename.c_str(), run );
+      brain.save( string( of ) );
+    }
 
     fflush( NULL );
     run++;

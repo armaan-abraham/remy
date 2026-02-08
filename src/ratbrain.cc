@@ -1,5 +1,6 @@
 #include "ratbrain.hh"
 #include <iostream>
+#include <fstream>
 
 using namespace std;
 
@@ -203,4 +204,12 @@ void RatBrain::learn()
     torch::nn::utils::clip_grad_norm_( _network->parameters(), MAX_GRAD_NORM );
     _optimizer->step();
   }
+}
+
+void RatBrain::save( const string & filename ) const
+{
+  torch::serialize::OutputArchive archive;
+  _network->save( archive );
+  archive.save_to( filename );
+  fprintf( stderr, "Saved model to %s\n", filename.c_str() );
 }
