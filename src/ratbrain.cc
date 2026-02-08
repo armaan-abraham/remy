@@ -7,7 +7,7 @@ using namespace std;
 
 PolicyValueNetImpl::PolicyValueNetImpl()
 {
-  input_proj = register_module( "input_proj", torch::nn::Linear( Memory::datasize, HIDDEN_SIZE ) );
+  input_proj = register_module( "input_proj", torch::nn::Linear( INPUT_DIM, HIDDEN_SIZE ) );
 
   for ( int i = 0; i < NUM_HIDDEN_LAYERS; i++ ) {
     layer_norms.push_back( register_module( "ln" + to_string( i ),
@@ -53,7 +53,7 @@ RatBrain::RatBrain()
   : _device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU ),
     _network(),
     _optimizer( nullptr ),
-    _buf_obs( torch::zeros( {REPLAY_BUFFER_SIZE, static_cast<long>(Memory::datasize)} ) ),
+    _buf_obs( torch::zeros( {REPLAY_BUFFER_SIZE, static_cast<long>(INPUT_DIM)} ) ),
     _buf_utility( torch::zeros( {REPLAY_BUFFER_SIZE} ) ),
     _buf_old_log_prob( torch::zeros( {REPLAY_BUFFER_SIZE} ) ),
     _buf_action_wi( torch::zeros( {REPLAY_BUFFER_SIZE}, torch::kLong ) ),
@@ -71,13 +71,13 @@ ActionResult RatBrain::get_window_and_intersend( const Memory & memory, int curr
 {
   torch::NoGradGuard no_grad;
 
-  /* Convert memory to tensor */
-  float obs[Memory::datasize];
-  for ( unsigned int i = 0; i < Memory::datasize; i++ ) {
-    obs[i] = static_cast<float>( memory.field( i ) );
+  /* Convert active memory fields to tensor. Whisker tree uses first 4 features of memory. */
+  float obs[INPUT_DIM];
+  for ( int i = 0; i < INPUT_DIM; i++ ) {
+    obs[i] = static_cast<float>( memory.field( ACTIVE_AXES[i] ) );
   }
   /* from_blob keeps a pointer into obs, so clone before the stack buffer dies */
-  auto obs_tensor = torch::from_blob( obs, {1, static_cast<long>(Memory::datasize)} )
+  auto obs_tensor = torch::from_blob( obs, {1, static_cast<long>(INPUT_DIM)} )
                       .clone()
                       .to( _device );
 
@@ -118,9 +118,7 @@ ActionResult RatBrain::get_window_and_intersend( const Memory & memory, int curr
   result.the_window = new_window;
   result.intersend_time = intersend;
 
-  for ( unsigned int i = 0; i < Memory::datasize; i++ ) {
-    result.obs_action.observation[i] = memory.field( i );
-  }
+  std::copy( obs, obs + INPUT_DIM, result.obs_action.observation.begin() );
   result.obs_action.action_wi_idx = action_wi;
   result.obs_action.action_wm_idx = action_wm;
   result.obs_action.action_is_idx = action_is;
@@ -133,7 +131,7 @@ void RatBrain::remember_episode( double utility, const vector<ObsAction> & obser
 {
   cerr << "remember_episode: " << observations.size() << " steps, utility=" << utility << endl;
   for ( const auto & obs : observations ) {
-    for ( unsigned int j = 0; j < Memory::datasize; j++ ) {
+    for ( int j = 0; j < INPUT_DIM; j++ ) {
       _buf_obs[_write_pos][j] = static_cast<float>( obs.observation[j] );
     }
     _buf_utility[_write_pos] = static_cast<float>( utility );

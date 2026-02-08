@@ -8,6 +8,16 @@
 #include <torch/torch.h>
 
 #include "memory.hh"
+#include "memoryrange.hh"
+
+/* Observation space: same active axes as the WhiskerTree default for Rat */
+constexpr std::array<Axis, 4> ACTIVE_AXES = {
+  RemyBuffers::MemoryRange::SEND_EWMA,
+  RemyBuffers::MemoryRange::REC_EWMA,
+  RemyBuffers::MemoryRange::RTT_RATIO,
+  RemyBuffers::MemoryRange::SLOW_REC_EWMA
+};
+constexpr int INPUT_DIM = ACTIVE_AXES.size();
 
 /* Training hyperparameters */
 constexpr size_t REPLAY_BUFFER_SIZE = 1e6;
@@ -42,7 +52,7 @@ constexpr int NUM_WINDOW_MULTIPLE  = static_cast<int>((WINDOW_MULTIPLE_MAX - WIN
 constexpr int NUM_INTERSEND        = static_cast<int>((INTERSEND_MAX - INTERSEND_MIN) / INTERSEND_STEP) + 1;
 
 struct ObsAction {
-  std::array<double, Memory::datasize> observation;
+  std::array<double, INPUT_DIM> observation;
   int action_wi_idx;
   int action_wm_idx;
   int action_is_idx;
@@ -78,7 +88,7 @@ private:
   std::shared_ptr<torch::optim::Adam> _optimizer;
 
   /* Replay buffer stored as flat tensors for vectorized batch indexing */
-  torch::Tensor _buf_obs;          /* [REPLAY_BUFFER_SIZE, Memory::datasize] float */
+  torch::Tensor _buf_obs;          /* [REPLAY_BUFFER_SIZE, INPUT_DIM] float */
   torch::Tensor _buf_utility;      /* [REPLAY_BUFFER_SIZE] float */
   torch::Tensor _buf_old_log_prob; /* [REPLAY_BUFFER_SIZE] float */
   torch::Tensor _buf_action_wi;    /* [REPLAY_BUFFER_SIZE] long */
