@@ -38,3 +38,5 @@ Makefile.in
 /src/libtorch-test
 /libtorch*
 /src/rattrainer
+
+.claude/

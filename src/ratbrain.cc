@@ -1,4 +1,5 @@
 #include "ratbrain.hh"
+#include <iostream>
 
 using namespace std;
 
@@ -30,7 +31,8 @@ PolicyValueNetImpl::forward( torch::Tensor x )
 /* ---- RatBrain implementation ---- */
 
 RatBrain::RatBrain()
-  : _network(),
+  : _device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU ),
+    _network(),
     _optimizer( nullptr ),
     _buf_obs( torch::zeros( {REPLAY_BUFFER_SIZE, static_cast<long>(Memory::datasize)} ) ),
     _buf_utility( torch::zeros( {REPLAY_BUFFER_SIZE} ) ),
@@ -41,7 +43,9 @@ RatBrain::RatBrain()
     _write_pos( 0 ),
     _buffer_count( 0 )
 {
+  _network->to( _device );
   _optimizer = make_shared<torch::optim::Adam>( _network->parameters(), LEARNING_RATE );
+  cerr << "RatBrain using device: " << _device << endl;
 }
 
 ActionResult RatBrain::get_window_and_intersend( const Memory & memory, int current_window )
@@ -53,7 +57,7 @@ ActionResult RatBrain::get_window_and_intersend( const Memory & memory, int curr
   for ( unsigned int i = 0; i < Memory::datasize; i++ ) {
     obs[i] = static_cast<float>( memory.field( i ) );
   }
-  auto obs_tensor = torch::from_blob( obs, {1, static_cast<long>(Memory::datasize)} );
+  auto obs_tensor = torch::from_blob( obs, {1, static_cast<long>(Memory::datasize)} ).to( _device );
 
   /* Forward pass */
   auto output = _network->forward( obs_tensor );
@@ -129,12 +133,12 @@ void RatBrain::learn()
     auto indices = torch::randint( 0, static_cast<long>(_buffer_count),
                                    {static_cast<long>(BATCH_SIZE)}, torch::kLong );
 
-    auto obs_batch = _buf_obs.index_select( 0, indices );
-    auto utility_batch = _buf_utility.index_select( 0, indices );
-    auto old_log_prob_batch = _buf_old_log_prob.index_select( 0, indices );
-    auto action_wi_batch = _buf_action_wi.index_select( 0, indices );
-    auto action_wm_batch = _buf_action_wm.index_select( 0, indices );
-    auto action_is_batch = _buf_action_is.index_select( 0, indices );
+    auto obs_batch = _buf_obs.index_select( 0, indices ).to( _device );
+    auto utility_batch = _buf_utility.index_select( 0, indices ).to( _device );
+    auto old_log_prob_batch = _buf_old_log_prob.index_select( 0, indices ).to( _device );
+    auto action_wi_batch = _buf_action_wi.index_select( 0, indices ).to( _device );
+    auto action_wm_batch = _buf_action_wm.index_select( 0, indices ).to( _device );
+    auto action_is_batch = _buf_action_is.index_select( 0, indices ).to( _device );
 
     /* Forward pass */
     auto output = _network->forward( obs_batch );

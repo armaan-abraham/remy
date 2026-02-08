@@ -29,7 +29,7 @@ fi
 # LibTorch configuration
 LIBTORCH_PREFIX="${PWD}/libtorch"
 LIBTORCH_CXXFLAGS="-isystem${LIBTORCH_PREFIX}/include -isystem${LIBTORCH_PREFIX}/include/torch/csrc/api/include"
-LIBTORCH_LIBS="-L${LIBTORCH_PREFIX}/lib -Wl,-rpath,${LIBTORCH_PREFIX}/lib -ltorch -ltorch_cpu -lc10"
+LIBTORCH_LIBS="-L${LIBTORCH_PREFIX}/lib -Wl,-rpath,${LIBTORCH_PREFIX}/lib -ltorch -Wl,--no-as-needed -ltorch_cuda -lc10_cuda -Wl,--as-needed -ltorch_cpu -lc10"
 AC_SUBST([LIBTORCH_PREFIX])
 AC_SUBST([LIBTORCH_CXXFLAGS])
 AC_SUBST([LIBTORCH_LIBS])

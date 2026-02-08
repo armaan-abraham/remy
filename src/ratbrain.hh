@@ -66,6 +66,7 @@ TORCH_MODULE(PolicyValueNet);
 
 class RatBrain {
 private:
+  torch::Device _device;
   PolicyValueNet _network;
   std::shared_ptr<torch::optim::Adam> _optimizer;
 
