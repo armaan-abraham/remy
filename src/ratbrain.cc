@@ -201,8 +201,16 @@ void RatBrain::learn()
 
     _optimizer->zero_grad();
     loss.backward();
-    torch::nn::utils::clip_grad_norm_( _network->parameters(), MAX_GRAD_NORM );
+    auto grad_norm = torch::nn::utils::clip_grad_norm_( _network->parameters(), MAX_GRAD_NORM );
     _optimizer->step();
+
+    if ( train_iter == UTD_RATIO - 1 ) {
+      cerr << "learn: loss=" << loss.item<float>()
+           << " entropy=" << entropy.item<float>()
+           << " value_loss=" << value_loss.item<float>()
+           << " policy_loss=" << policy_loss.item<float>()
+           << " grad_norm=" << grad_norm.item<float>() << endl;
+    }
   }
 }
 
