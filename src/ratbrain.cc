@@ -209,7 +209,7 @@ void RatBrain::learn()
            << " entropy=" << entropy.item<float>()
            << " value_loss=" << value_loss.item<float>()
            << " policy_loss=" << policy_loss.item<float>()
-           << " grad_norm=" << grad_norm.item<float>() << endl;
+           << " grad_norm=" << grad_norm << endl;
     }
   }
 }
