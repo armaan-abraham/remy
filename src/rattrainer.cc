@@ -18,6 +18,10 @@
 
 using namespace std;
 
+/* Number of times to replicate the config list per collect_experience call,
+   so more total experience is collected per iteration. */
+const unsigned int NUM_CONFIG_EVALS = 8;
+
 /* ---- Experience collection and main loop ---- */
 
 double collect_experience( RatBrain & brain,
@@ -112,9 +116,15 @@ int main( int argc, char *argv[] )
   }
 
   ConfigRange config_range( input_config );
-  vector<NetConfig> configs = get_config_outer_product( config_range );
+  vector<NetConfig> base_configs = get_config_outer_product( config_range );
   unsigned int prng_seed = global_PRNG()();
   unsigned int tick_count = config_range.simulation_ticks;
+
+  vector<NetConfig> configs;
+  configs.reserve( base_configs.size() * NUM_CONFIG_EVALS );
+  for ( unsigned int r = 0; r < NUM_CONFIG_EVALS; r++ ) {
+    configs.insert( configs.end(), base_configs.begin(), base_configs.end() );
+  }
 
   printf( "#######################\n" );
   printf( "Neural Rat Trainer\n" );

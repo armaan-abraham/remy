@@ -10,13 +10,13 @@
 #include "memory.hh"
 
 /* Training hyperparameters */
-constexpr size_t REPLAY_BUFFER_SIZE = 100000;
+constexpr size_t REPLAY_BUFFER_SIZE = 1e6;
 constexpr size_t BATCH_SIZE = 1024;
 constexpr double LEARNING_RATE = 3e-4;
 constexpr double PPO_EPSILON = 0.2;
 // Update-to-data ratio: number of training iterations after each experience
 // collection
-constexpr size_t UTD_RATIO = 10; 
+constexpr size_t UTD_RATIO = 20; 
 constexpr double VALUE_LOSS_COEFF = 0.5;
 constexpr double ENTROPY_COEFF = 0.01;
 constexpr int HIDDEN_SIZE = 128;
