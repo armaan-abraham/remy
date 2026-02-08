@@ -10,14 +10,17 @@
 #include "memory.hh"
 
 /* Training hyperparameters */
-constexpr size_t REPLAY_BUFFER_SIZE = 10000;
-constexpr size_t BATCH_SIZE = 256;
+constexpr size_t REPLAY_BUFFER_SIZE = 100000;
+constexpr size_t BATCH_SIZE = 1024;
 constexpr double LEARNING_RATE = 3e-4;
 constexpr double PPO_EPSILON = 0.2;
-constexpr size_t PPO_EPOCHS = 4;
+// Update-to-data ratio: number of training iterations after each experience
+// collection
+constexpr size_t UTD_RATIO = 10; 
 constexpr double VALUE_LOSS_COEFF = 0.5;
 constexpr double ENTROPY_COEFF = 0.01;
-constexpr int HIDDEN_SIZE = 64;
+constexpr int HIDDEN_SIZE = 128;
+constexpr int NUM_HIDDEN_LAYERS = 2;
 
 /* Action space ranges (matching Whisker optimization settings in whisker.hh) */
 constexpr int    WINDOW_INCREMENT_MIN  = 0;
@@ -52,7 +55,10 @@ struct ActionResult {
 };
 
 struct PolicyValueNetImpl : torch::nn::Module {
-  torch::nn::Linear fc1{nullptr}, fc2{nullptr};
+  torch::nn::Linear input_proj{nullptr};
+  std::vector<torch::nn::Linear> hidden_layers;
+  std::vector<torch::nn::LayerNorm> layer_norms;
+  torch::nn::LayerNorm final_norm{nullptr};
   torch::nn::Linear policy_wi{nullptr}, policy_wm{nullptr}, policy_is{nullptr};
   torch::nn::Linear value_head{nullptr};
 

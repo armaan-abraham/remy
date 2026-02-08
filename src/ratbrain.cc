@@ -7,8 +7,18 @@ using namespace std;
 
 PolicyValueNetImpl::PolicyValueNetImpl()
 {
-  fc1 = register_module( "fc1", torch::nn::Linear( Memory::datasize, HIDDEN_SIZE ) );
-  fc2 = register_module( "fc2", torch::nn::Linear( HIDDEN_SIZE, HIDDEN_SIZE ) );
+  input_proj = register_module( "input_proj", torch::nn::Linear( Memory::datasize, HIDDEN_SIZE ) );
+
+  for ( int i = 0; i < NUM_HIDDEN_LAYERS; i++ ) {
+    layer_norms.push_back( register_module( "ln" + to_string( i ),
+      torch::nn::LayerNorm( torch::nn::LayerNormOptions( {HIDDEN_SIZE} ) ) ) );
+    hidden_layers.push_back( register_module( "fc" + to_string( i ),
+      torch::nn::Linear( HIDDEN_SIZE, HIDDEN_SIZE ) ) );
+  }
+
+  final_norm = register_module( "final_norm",
+    torch::nn::LayerNorm( torch::nn::LayerNormOptions( {HIDDEN_SIZE} ) ) );
+
   policy_wi = register_module( "policy_wi", torch::nn::Linear( HIDDEN_SIZE, NUM_WINDOW_INCREMENT ) );
   policy_wm = register_module( "policy_wm", torch::nn::Linear( HIDDEN_SIZE, NUM_WINDOW_MULTIPLE ) );
   policy_is = register_module( "policy_is", torch::nn::Linear( HIDDEN_SIZE, NUM_INTERSEND ) );
@@ -18,8 +28,17 @@ PolicyValueNetImpl::PolicyValueNetImpl()
 tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
 PolicyValueNetImpl::forward( torch::Tensor x )
 {
-  x = torch::relu( fc1->forward( x ) );
-  x = torch::relu( fc2->forward( x ) );
+  x = torch::gelu( input_proj->forward( x ) );
+
+  for ( int i = 0; i < NUM_HIDDEN_LAYERS; i++ ) {
+    auto residual = x;
+    x = layer_norms[i]->forward( x );
+    x = torch::gelu( hidden_layers[i]->forward( x ) );
+    x = x + residual;
+  }
+
+  x = final_norm->forward( x );
+
   return make_tuple(
     policy_wi->forward( x ),
     policy_wm->forward( x ),
@@ -109,6 +128,7 @@ ActionResult RatBrain::get_window_and_intersend( const Memory & memory, int curr
 
 void RatBrain::remember_episode( double utility, const vector<ObsAction> & observations )
 {
+  cerr << "remember_episode: " << observations.size() << " steps, utility=" << utility << endl;
   for ( const auto & obs : observations ) {
     for ( unsigned int j = 0; j < Memory::datasize; j++ ) {
       _buf_obs[_write_pos][j] = static_cast<float>( obs.observation[j] );
@@ -128,7 +148,7 @@ void RatBrain::learn()
 {
   if ( _buffer_count < BATCH_SIZE ) return;
 
-  for ( size_t epoch = 0; epoch < PPO_EPOCHS; epoch++ ) {
+  for ( size_t train_iter = 0; train_iter < UTD_RATIO; train_iter++ ) {
     /* Sample random batch indices and use vectorized index_select */
     auto indices = torch::randint( 0, static_cast<long>(_buffer_count),
                                    {static_cast<long>(BATCH_SIZE)}, torch::kLong );
