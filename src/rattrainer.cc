@@ -117,7 +117,6 @@ int main( int argc, char *argv[] )
 
   ConfigRange config_range( input_config );
   vector<NetConfig> base_configs = get_config_outer_product( config_range );
-  unsigned int prng_seed = global_PRNG()();
   unsigned int tick_count = config_range.simulation_ticks;
 
   vector<NetConfig> configs;
@@ -136,6 +135,7 @@ int main( int argc, char *argv[] )
   unsigned int run = 0;
 
   while ( 1 ) {
+    unsigned int prng_seed = global_PRNG()();
     double score = collect_experience( brain, prng_seed, configs, tick_count );
     printf( "run = %u, score = %f\n", run, score );
 
