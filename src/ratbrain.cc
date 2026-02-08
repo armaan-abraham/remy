@@ -202,6 +202,7 @@ void RatBrain::learn()
 
     _optimizer->zero_grad();
     loss.backward();
+    torch::nn::utils::clip_grad_norm_( _network->parameters(), MAX_GRAD_NORM );
     _optimizer->step();
   }
 }

@@ -19,6 +19,7 @@ constexpr double PPO_EPSILON = 0.2;
 constexpr size_t UTD_RATIO = 20; 
 constexpr double VALUE_LOSS_COEFF = 0.5;
 constexpr double ENTROPY_COEFF = 0.01;
+constexpr double MAX_GRAD_NORM = 0.5;
 constexpr int HIDDEN_SIZE = 128;
 constexpr int NUM_HIDDEN_LAYERS = 2;
 
