@@ -12,7 +12,7 @@
 
 class Rat
 {
-private:
+protected:
   const WhiskerTree & _whiskers;
   Memory _memory;
 
@@ -28,7 +28,10 @@ private:
   unsigned int _flow_id;
   int _largest_ack;
 
+  virtual void update_window_and_intersend();
+
 public:
+  virtual ~Rat() {}
   Rat( WhiskerTree & s_whiskers, const bool s_track=false );
 
   void packets_received( const std::vector< Packet > & packets );

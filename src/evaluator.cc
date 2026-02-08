@@ -6,13 +6,10 @@
 #include "rat-templates.cc"
 #include "fish-templates.cc"
 
-template <typename T>
-Evaluator< T >::Evaluator( const ConfigRange & range )
-  : _prng_seed( global_PRNG()() ), /* freeze the PRNG seed for the life of this Evaluator */
-    _tick_count( range.simulation_ticks ),
-    _configs()
+vector< NetConfig > get_config_outer_product( const ConfigRange & range )
 {
-  // add configs from every point in the cube of configs
+  vector< NetConfig > configs;
+
   for (double link_ppt = range.link_ppt.low; link_ppt <= range.link_ppt.high; link_ppt += range.link_ppt.incr) {
     for (double rtt = range.rtt.low; rtt <= range.rtt.high; rtt += range.rtt.incr) {
       for (unsigned int senders = range.num_senders.low; senders <= range.num_senders.high; senders += range.num_senders.incr) {
@@ -20,7 +17,7 @@ Evaluator< T >::Evaluator( const ConfigRange & range )
           for (double off = range.mean_off_duration.low; off <= range.mean_off_duration.high; off += range.mean_off_duration.incr) {
             for ( double buffer_size = range.buffer_size.low; buffer_size <= range.buffer_size.high; buffer_size += range.buffer_size.incr) {
               for ( double loss_rate = range.stochastic_loss_rate.low; loss_rate <= range.stochastic_loss_rate.high; loss_rate += range.stochastic_loss_rate.incr) {
-                _configs.push_back( NetConfig().set_link_ppt( link_ppt ).set_delay( rtt ).set_num_senders( senders ).set_on_duration( on ).set_off_duration(off).set_buffer_size( buffer_size ).set_stochastic_loss_rate( loss_rate ) );
+                configs.push_back( NetConfig().set_link_ppt( link_ppt ).set_delay( rtt ).set_num_senders( senders ).set_on_duration( on ).set_off_duration(off).set_buffer_size( buffer_size ).set_stochastic_loss_rate( loss_rate ) );
                 if ( range.stochastic_loss_rate.isOne() ) { break; }
               }
               if ( range.buffer_size.isOne() ) { break; }
@@ -35,6 +32,16 @@ Evaluator< T >::Evaluator( const ConfigRange & range )
     }
     if ( range.link_ppt.isOne() ) { break; }
   }
+
+  return configs;
+}
+
+template <typename T>
+Evaluator< T >::Evaluator( const ConfigRange & range )
+  : _prng_seed( global_PRNG()() ), /* freeze the PRNG seed for the life of this Evaluator */
+    _tick_count( range.simulation_ticks ),
+    _configs( get_config_outer_product( range ) )
+{
 }
 
 template <typename T>

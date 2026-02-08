@@ -19,16 +19,20 @@ Rat::Rat( WhiskerTree & s_whiskers, const bool s_track )
 {
 }
 
+void Rat::update_window_and_intersend()
+{
+  const Whisker & current_whisker( _whiskers.use_whisker( _memory, _track ) );
+  _the_window = current_whisker.window( _the_window );
+  _intersend_time = current_whisker.intersend();
+}
+
 void Rat::packets_received( const vector< Packet > & packets ) {
   _packets_received += packets.size();
   /* Assumption: There is no reordering */
   _memory.packets_received( packets, _flow_id, _largest_ack );
   _largest_ack = max( packets.at( packets.size() - 1 ).seq_num, _largest_ack );
 
-  const Whisker & current_whisker( _whiskers.use_whisker( _memory, _track ) );
-
-  _the_window = current_whisker.window( _the_window );
-  _intersend_time = current_whisker.intersend();
+  update_window_and_intersend();
 }
 
 void Rat::reset( const double & )
@@ -41,10 +45,7 @@ void Rat::reset( const double & )
   _largest_ack = _packets_sent - 1; /* Assume everything's been delivered */
   assert( _flow_id != 0 );
 
-  /* initial window and intersend time */
-  const Whisker & current_whisker( _whiskers.use_whisker( _memory, _track ) );
-  _the_window = current_whisker.window( _the_window );
-  _intersend_time = current_whisker.intersend();
+  update_window_and_intersend();
 }
 
 double Rat::next_event_time( const double & tickno ) const

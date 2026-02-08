@@ -11,6 +11,8 @@
 #include "problem.pb.h"
 #include "answer.pb.h"
 
+std::vector< NetConfig > get_config_outer_product( const ConfigRange & range );
+
 template <typename T>
 class Evaluator
 {
@@ -53,6 +55,7 @@ public:
 			const std::vector<NetConfig> & configs,
 			const bool trace,
 			const unsigned int ticks_to_run );
+
 };
 
 #endif
