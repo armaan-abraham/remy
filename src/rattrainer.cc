@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <chrono>
 
 #include "CLI11.hpp"
 #include "ratbrain.hh"
@@ -180,8 +181,11 @@ int main( int argc, char *argv[] )
 
   while ( 1 ) {
     unsigned int prng_seed = global_PRNG()();
+    auto t0 = chrono::steady_clock::now();
     double score = collect_experience( brain, prng_seed, configs, tick_count );
-    printf( "run = %u, score = %f\n", run, score );
+    auto t1 = chrono::steady_clock::now();
+    double collect_secs = chrono::duration<double>( t1 - t0 ).count();
+    printf( "run = %u, score = %f, collect_time = %.2fs\n", run, score, collect_secs );
 
     brain.learn();
 

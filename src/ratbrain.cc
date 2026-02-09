@@ -79,9 +79,9 @@ ActionResult RatBrain::get_window_and_intersend( const Memory & memory, int curr
     obs[i] = static_cast<float>( memory.field( ACTIVE_AXES[i] ) );
   }
   /* from_blob keeps a pointer into obs, so clone before the stack buffer dies */
-  auto obs_tensor = torch::from_blob( obs, {1, static_cast<long>(INPUT_DIM)} )
-                      .clone()
-                      .to( _device );
+  auto obs_tensor = torch::from_blob( obs, {1, static_cast<long>(INPUT_DIM)} );
+                      // .clone()
+                      // .to( _device );
 
   /* Forward pass */
   auto output = _network->forward( obs_tensor );
