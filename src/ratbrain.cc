@@ -1,6 +1,7 @@
 #include "ratbrain.hh"
 #include <iostream>
 #include <fstream>
+#include <cassert>
 
 using namespace std;
 
@@ -78,6 +79,7 @@ RatBrain::RatBrain( const TrainingConfig & config )
     _write_pos( 0 ),
     _buffer_count( 0 )
 {
+  assert(_device == torch::kCPU);
   _network->to( _device );
   _optimizer = make_shared<torch::optim::Adam>( _network->parameters(), config.learning_rate );
   cerr << "RatBrain using device: " << _device << endl;
