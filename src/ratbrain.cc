@@ -220,7 +220,19 @@ void RatBrain::learn()
       accum_policy_loss += policy_loss.item<float>();
     }
 
-    auto grad_norm = torch::nn::utils::clip_grad_norm_( _network->parameters(), _config.max_grad_norm );
+    double grad_norm;
+    if ( _config.max_grad_norm > 0 ) {
+      grad_norm = torch::nn::utils::clip_grad_norm_( _network->parameters(), _config.max_grad_norm );
+    } else {
+      // compute grad norm for logging without clipping
+      double total = 0.0;
+      for ( const auto & p : _network->parameters() ) {
+        if ( p.grad().defined() ) {
+          total += p.grad().norm().item<double>() * p.grad().norm().item<double>();
+        }
+      }
+      grad_norm = std::sqrt( total );
+    }
     _optimizer->step();
 
     if ( train_iter == _config.utd_ratio - 1 ) {

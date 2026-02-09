@@ -28,7 +28,7 @@ struct TrainingConfig {
   size_t utd_ratio          = 8;      /* training iterations per experience collection */
   double value_loss_coeff   = 0.5;
   double entropy_coeff      = 0.005;
-  double max_grad_norm      = 1000.0;
+  double max_grad_norm      = -1.0;  /* -1 for no clipping */
   size_t accumulation_steps = 16;
   int    hidden_size        = 128;
   int    num_hidden_layers  = 2;
