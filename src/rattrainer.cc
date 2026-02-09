@@ -166,6 +166,14 @@ int main( int argc, char *argv[] )
   printf( "  num_hidden_layers:   %d\n",  tc.num_hidden_layers );
   printf( "#######################\n" );
 
+  /* Create checkpoint directory if it does not exist */
+  if ( !output_filename.empty() ) {
+    string dir = output_filename.substr( 0, output_filename.rfind( '/' ) );
+    if ( !dir.empty() && dir != output_filename ) {
+      mkdir( dir.c_str(), 0755 );
+    }
+  }
+
   RatBrain brain( tc );
 
   unsigned int run = 0;
