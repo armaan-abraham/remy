@@ -29,8 +29,8 @@ constexpr double PPO_EPSILON = 0.2;
 constexpr size_t UTD_RATIO = 8; 
 constexpr double VALUE_LOSS_COEFF = 1.0;
 constexpr double ENTROPY_COEFF = 0.005;
-constexpr double MAX_GRAD_NORM = 500.0;
-constexpr size_t ACCUMULATION_STEPS = 1;
+constexpr double MAX_GRAD_NORM = 1000.0;
+constexpr size_t ACCUMULATION_STEPS = 8;
 constexpr int HIDDEN_SIZE = 128;
 constexpr int NUM_HIDDEN_LAYERS = 2;
 
