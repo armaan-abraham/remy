@@ -199,8 +199,9 @@ void RatBrain::learn()
       auto surr2 = torch::clamp( ratio, 1.0 - _config.ppo_epsilon, 1.0 + _config.ppo_epsilon ) * advantage;
       auto policy_loss = -torch::min( surr1, surr2 ).mean();
 
-      /* Value loss */
-      auto value_loss = torch::mse_loss( values, utility_batch );
+      /* Value loss (normalized by mean utility magnitude to keep scale-invariant) */
+      auto mean_utility = utility_batch.abs().mean().clamp_min( 1e-6 );
+      auto value_loss = torch::mse_loss( values, utility_batch ) / mean_utility;
 
       /* Entropy bonus */
       auto entropy_wi = -( torch::softmax( logits_wi, 1 ) * log_probs_wi ).sum( 1 );
