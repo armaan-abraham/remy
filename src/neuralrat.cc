@@ -9,6 +9,7 @@ WhiskerTree & NeuralRat::get_dummy_whiskers()
 NeuralRat::NeuralRat( RatBrain & brain )
   : Rat( get_dummy_whiskers() ),
     _brain( brain ),
+    _local_network( brain.network()->clone_network() ),
     _episode_observations()
 {
 }
@@ -16,13 +17,14 @@ NeuralRat::NeuralRat( RatBrain & brain )
 NeuralRat::NeuralRat( const NeuralRat & other )
   : Rat( other ),
     _brain( other._brain ),
+    _local_network( other._local_network->clone_network() ),
     _episode_observations()  /* each copy starts with fresh observations */
 {
 }
 
 void NeuralRat::update_window_and_intersend()
 {
-  ActionResult result = _brain.get_window_and_intersend( _memory, _the_window );
+  ActionResult result = infer_action( _local_network, _memory, _the_window );
   _the_window = result.the_window;
   _intersend_time = result.intersend_time;
   _episode_observations.push_back( result.obs_action );

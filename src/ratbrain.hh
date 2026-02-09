@@ -67,6 +67,9 @@ struct ActionResult {
 };
 
 struct PolicyValueNetImpl : torch::nn::Module {
+  int _hidden_size;
+  int _num_hidden_layers;
+
   torch::nn::Linear input_proj{nullptr};
   std::vector<torch::nn::Linear> hidden_layers;
   std::vector<torch::nn::LayerNorm> layer_norms;
@@ -78,9 +81,14 @@ struct PolicyValueNetImpl : torch::nn::Module {
 
   std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
   forward( torch::Tensor x );
+
+  std::shared_ptr<PolicyValueNetImpl> clone_network() const;
 };
 
 TORCH_MODULE(PolicyValueNet);
+
+/* Free function: run inference on any PolicyValueNet (used by both RatBrain and NeuralRat) */
+ActionResult infer_action( PolicyValueNet & net, const Memory & memory, int current_window );
 
 class RatBrain {
 private:
@@ -103,7 +111,7 @@ private:
 public:
   RatBrain( const TrainingConfig & config = TrainingConfig() );
 
-  ActionResult get_window_and_intersend( const Memory & memory, int current_window );
+  const PolicyValueNet & network() const { return _network; }
   void remember_episode( double utility, const std::vector<ObsAction> & observations );
   void learn();
   void save( const std::string & filename ) const;

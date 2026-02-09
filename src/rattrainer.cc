@@ -3,6 +3,7 @@
 #include <string>
 #include <future>
 #include <mutex>
+#include <thread>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -57,8 +58,8 @@ double collect_experience( RatBrain & brain,
           double sim_utility = network.senders().utility();
 
           /* Safely record experience into the shared replay buffer.
-             Inference (get_window_and_intersend) is read-only under NoGradGuard
-             and safe to call concurrently, but remember_episode writes to the
+             Inference uses the NeuralRat's local network clone under NoGradGuard
+             and is safe to call concurrently, but remember_episode writes to the
              shared buffer and needs mutex protection. */
           {
             lock_guard<mutex> lock( brain_mutex );
@@ -179,14 +180,18 @@ int main( int argc, char *argv[] )
 
   unsigned int run = 0;
 
+  const int num_cpus = thread::hardware_concurrency();
+
   while ( 1 ) {
     unsigned int prng_seed = global_PRNG()();
     auto t0 = chrono::steady_clock::now();
+    torch::set_num_threads( 1 );
     double score = collect_experience( brain, prng_seed, configs, tick_count );
     auto t1 = chrono::steady_clock::now();
     double collect_secs = chrono::duration<double>( t1 - t0 ).count();
     printf( "run = %u, score = %f, collect_time = %.2fs\n", run, score, collect_secs );
 
+    torch::set_num_threads( num_cpus );
     brain.learn();
 
     if ( save_every > 0 && !output_filename.empty() && ( run % save_every == 0 ) ) {

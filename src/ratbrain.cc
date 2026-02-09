@@ -7,6 +7,7 @@ using namespace std;
 /* ---- PolicyValueNet implementation ---- */
 
 PolicyValueNetImpl::PolicyValueNetImpl( int hidden_size, int num_hidden_layers )
+  : _hidden_size( hidden_size ), _num_hidden_layers( num_hidden_layers )
 {
   input_proj = register_module( "input_proj", torch::nn::Linear( INPUT_DIM, hidden_size ) );
 
@@ -48,6 +49,19 @@ PolicyValueNetImpl::forward( torch::Tensor x )
   );
 }
 
+std::shared_ptr<PolicyValueNetImpl> PolicyValueNetImpl::clone_network() const
+{
+  auto net = std::make_shared<PolicyValueNetImpl>( _hidden_size, _num_hidden_layers );
+  torch::NoGradGuard no_grad;
+  auto src_params = parameters();
+  auto dst_params = net->parameters();
+  for ( size_t i = 0; i < src_params.size(); i++ ) {
+    dst_params[i].copy_( src_params[i] );
+  }
+  net->eval();
+  return net;
+}
+
 /* ---- RatBrain implementation ---- */
 
 RatBrain::RatBrain( const TrainingConfig & config )
@@ -69,7 +83,7 @@ RatBrain::RatBrain( const TrainingConfig & config )
   cerr << "RatBrain using device: " << _device << endl;
 }
 
-ActionResult RatBrain::get_window_and_intersend( const Memory & memory, int current_window )
+ActionResult infer_action( PolicyValueNet & net, const Memory & memory, int current_window )
 {
   torch::NoGradGuard no_grad;
 
@@ -78,13 +92,10 @@ ActionResult RatBrain::get_window_and_intersend( const Memory & memory, int curr
   for ( int i = 0; i < INPUT_DIM; i++ ) {
     obs[i] = static_cast<float>( memory.field( ACTIVE_AXES[i] ) );
   }
-  /* from_blob keeps a pointer into obs, so clone before the stack buffer dies */
   auto obs_tensor = torch::from_blob( obs, {1, static_cast<long>(INPUT_DIM)} );
-                      // .clone()
-                      // .to( _device );
 
   /* Forward pass */
-  auto output = _network->forward( obs_tensor );
+  auto output = net->forward( obs_tensor );
   auto logits_wi = get<0>( output );
   auto logits_wm = get<1>( output );
   auto logits_is = get<2>( output );
@@ -128,6 +139,7 @@ ActionResult RatBrain::get_window_and_intersend( const Memory & memory, int curr
 
   return result;
 }
+
 
 void RatBrain::remember_episode( double utility, const vector<ObsAction> & observations )
 {
