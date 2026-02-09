@@ -6,24 +6,24 @@ using namespace std;
 
 /* ---- PolicyValueNet implementation ---- */
 
-PolicyValueNetImpl::PolicyValueNetImpl()
+PolicyValueNetImpl::PolicyValueNetImpl( int hidden_size, int num_hidden_layers )
 {
-  input_proj = register_module( "input_proj", torch::nn::Linear( INPUT_DIM, HIDDEN_SIZE ) );
+  input_proj = register_module( "input_proj", torch::nn::Linear( INPUT_DIM, hidden_size ) );
 
-  for ( int i = 0; i < NUM_HIDDEN_LAYERS; i++ ) {
+  for ( int i = 0; i < num_hidden_layers; i++ ) {
     layer_norms.push_back( register_module( "ln" + to_string( i ),
-      torch::nn::LayerNorm( torch::nn::LayerNormOptions( {HIDDEN_SIZE} ) ) ) );
+      torch::nn::LayerNorm( torch::nn::LayerNormOptions( {hidden_size} ) ) ) );
     hidden_layers.push_back( register_module( "fc" + to_string( i ),
-      torch::nn::Linear( HIDDEN_SIZE, HIDDEN_SIZE ) ) );
+      torch::nn::Linear( hidden_size, hidden_size ) ) );
   }
 
   final_norm = register_module( "final_norm",
-    torch::nn::LayerNorm( torch::nn::LayerNormOptions( {HIDDEN_SIZE} ) ) );
+    torch::nn::LayerNorm( torch::nn::LayerNormOptions( {hidden_size} ) ) );
 
-  policy_wi = register_module( "policy_wi", torch::nn::Linear( HIDDEN_SIZE, NUM_WINDOW_INCREMENT ) );
-  policy_wm = register_module( "policy_wm", torch::nn::Linear( HIDDEN_SIZE, NUM_WINDOW_MULTIPLE ) );
-  policy_is = register_module( "policy_is", torch::nn::Linear( HIDDEN_SIZE, NUM_INTERSEND ) );
-  value_head = register_module( "value_head", torch::nn::Linear( HIDDEN_SIZE, 1 ) );
+  policy_wi = register_module( "policy_wi", torch::nn::Linear( hidden_size, NUM_WINDOW_INCREMENT ) );
+  policy_wm = register_module( "policy_wm", torch::nn::Linear( hidden_size, NUM_WINDOW_MULTIPLE ) );
+  policy_is = register_module( "policy_is", torch::nn::Linear( hidden_size, NUM_INTERSEND ) );
+  value_head = register_module( "value_head", torch::nn::Linear( hidden_size, 1 ) );
 }
 
 tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
@@ -31,7 +31,7 @@ PolicyValueNetImpl::forward( torch::Tensor x )
 {
   x = torch::gelu( input_proj->forward( x ) );
 
-  for ( int i = 0; i < NUM_HIDDEN_LAYERS; i++ ) {
+  for ( size_t i = 0; i < hidden_layers.size(); i++ ) {
     auto residual = x;
     x = layer_norms[i]->forward( x );
     x = torch::gelu( hidden_layers[i]->forward( x ) );
@@ -50,21 +50,22 @@ PolicyValueNetImpl::forward( torch::Tensor x )
 
 /* ---- RatBrain implementation ---- */
 
-RatBrain::RatBrain()
-  : _device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU ),
-    _network(),
+RatBrain::RatBrain( const TrainingConfig & config )
+  : _config( config ),
+    _device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU ),
+    _network( config.hidden_size, config.num_hidden_layers ),
     _optimizer( nullptr ),
-    _buf_obs( torch::zeros( {REPLAY_BUFFER_SIZE, static_cast<long>(INPUT_DIM)} ) ),
-    _buf_utility( torch::zeros( {REPLAY_BUFFER_SIZE} ) ),
-    _buf_old_log_prob( torch::zeros( {REPLAY_BUFFER_SIZE} ) ),
-    _buf_action_wi( torch::zeros( {REPLAY_BUFFER_SIZE}, torch::kLong ) ),
-    _buf_action_wm( torch::zeros( {REPLAY_BUFFER_SIZE}, torch::kLong ) ),
-    _buf_action_is( torch::zeros( {REPLAY_BUFFER_SIZE}, torch::kLong ) ),
+    _buf_obs( torch::zeros( {static_cast<long>(config.replay_buffer_size), static_cast<long>(INPUT_DIM)} ) ),
+    _buf_utility( torch::zeros( {static_cast<long>(config.replay_buffer_size)} ) ),
+    _buf_old_log_prob( torch::zeros( {static_cast<long>(config.replay_buffer_size)} ) ),
+    _buf_action_wi( torch::zeros( {static_cast<long>(config.replay_buffer_size)}, torch::kLong ) ),
+    _buf_action_wm( torch::zeros( {static_cast<long>(config.replay_buffer_size)}, torch::kLong ) ),
+    _buf_action_is( torch::zeros( {static_cast<long>(config.replay_buffer_size)}, torch::kLong ) ),
     _write_pos( 0 ),
     _buffer_count( 0 )
 {
   _network->to( _device );
-  _optimizer = make_shared<torch::optim::Adam>( _network->parameters(), LEARNING_RATE );
+  _optimizer = make_shared<torch::optim::Adam>( _network->parameters(), config.learning_rate );
   cerr << "RatBrain using device: " << _device << endl;
 }
 
@@ -141,27 +142,27 @@ void RatBrain::remember_episode( double utility, const vector<ObsAction> & obser
     _buf_action_wm[_write_pos] = static_cast<int64_t>( obs.action_wm_idx );
     _buf_action_is[_write_pos] = static_cast<int64_t>( obs.action_is_idx );
 
-    _write_pos = ( _write_pos + 1 ) % REPLAY_BUFFER_SIZE;
-    if ( _buffer_count < REPLAY_BUFFER_SIZE ) _buffer_count++;
+    _write_pos = ( _write_pos + 1 ) % _config.replay_buffer_size;
+    if ( _buffer_count < _config.replay_buffer_size ) _buffer_count++;
   }
 }
 
 void RatBrain::learn()
 {
-  if ( _buffer_count < BATCH_SIZE ) return;
+  if ( _buffer_count < _config.batch_size ) return;
 
-  const long mini_batch_size = static_cast<long>( BATCH_SIZE / ACCUMULATION_STEPS );
+  const long mini_batch_size = static_cast<long>( _config.batch_size / _config.accumulation_steps );
 
-  for ( size_t train_iter = 0; train_iter < UTD_RATIO; train_iter++ ) {
+  for ( size_t train_iter = 0; train_iter < _config.utd_ratio; train_iter++ ) {
     /* Sample random batch indices for the full effective batch */
     auto indices = torch::randint( 0, static_cast<long>(_buffer_count),
-                                   {static_cast<long>(BATCH_SIZE)}, torch::kLong );
+                                   {static_cast<long>(_config.batch_size)}, torch::kLong );
 
     _optimizer->zero_grad();
 
     float accum_loss = 0, accum_entropy = 0, accum_value_loss = 0, accum_policy_loss = 0;
 
-    for ( size_t accum_step = 0; accum_step < ACCUMULATION_STEPS; accum_step++ ) {
+    for ( size_t accum_step = 0; accum_step < _config.accumulation_steps; accum_step++ ) {
       /* Slice indices for this mini-batch and load to GPU */
       auto mb_indices = indices.slice( 0,
         accum_step * mini_batch_size, ( accum_step + 1 ) * mini_batch_size );
@@ -195,7 +196,7 @@ void RatBrain::learn()
       /* PPO clipped surrogate loss */
       auto ratio = torch::exp( new_log_prob - old_log_prob_batch );
       auto surr1 = ratio * advantage;
-      auto surr2 = torch::clamp( ratio, 1.0 - PPO_EPSILON, 1.0 + PPO_EPSILON ) * advantage;
+      auto surr2 = torch::clamp( ratio, 1.0 - _config.ppo_epsilon, 1.0 + _config.ppo_epsilon ) * advantage;
       auto policy_loss = -torch::min( surr1, surr2 ).mean();
 
       /* Value loss */
@@ -208,25 +209,25 @@ void RatBrain::learn()
       auto entropy = ( entropy_wi + entropy_wm + entropy_is ).mean();
 
       /* Scale loss by accumulation steps so gradients average correctly */
-      auto loss = ( policy_loss + VALUE_LOSS_COEFF * value_loss - ENTROPY_COEFF * entropy )
-                  / static_cast<double>( ACCUMULATION_STEPS );
+      auto loss = ( policy_loss + _config.value_loss_coeff * value_loss - _config.entropy_coeff * entropy )
+                  / static_cast<double>( _config.accumulation_steps );
       loss.backward();
 
       /* Track unscaled metrics for logging */
-      accum_loss += loss.item<float>() * ACCUMULATION_STEPS;
+      accum_loss += loss.item<float>() * _config.accumulation_steps;
       accum_entropy += entropy.item<float>();
       accum_value_loss += value_loss.item<float>();
       accum_policy_loss += policy_loss.item<float>();
     }
 
-    auto grad_norm = torch::nn::utils::clip_grad_norm_( _network->parameters(), MAX_GRAD_NORM );
+    auto grad_norm = torch::nn::utils::clip_grad_norm_( _network->parameters(), _config.max_grad_norm );
     _optimizer->step();
 
-    if ( train_iter == UTD_RATIO - 1 ) {
-      cerr << "learn: loss=" << accum_loss / ACCUMULATION_STEPS
-           << " entropy=" << accum_entropy / ACCUMULATION_STEPS
-           << " value_loss=" << accum_value_loss / ACCUMULATION_STEPS
-           << " policy_loss=" << accum_policy_loss / ACCUMULATION_STEPS
+    if ( train_iter == _config.utd_ratio - 1 ) {
+      cerr << "learn: loss=" << accum_loss / _config.accumulation_steps
+           << " entropy=" << accum_entropy / _config.accumulation_steps
+           << " value_loss=" << accum_value_loss / _config.accumulation_steps
+           << " policy_loss=" << accum_policy_loss / _config.accumulation_steps
            << " grad_norm=" << grad_norm << endl;
     }
   }

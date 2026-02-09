@@ -19,20 +19,20 @@ constexpr std::array<Axis, 4> ACTIVE_AXES = {
 };
 constexpr int INPUT_DIM = ACTIVE_AXES.size();
 
-/* Training hyperparameters */
-constexpr size_t REPLAY_BUFFER_SIZE = 3e6;
-constexpr size_t BATCH_SIZE = 131072;
-constexpr double LEARNING_RATE = 3e-4;
-constexpr double PPO_EPSILON = 0.2;
-// Update-to-data ratio: number of training iterations after each experience
-// collection
-constexpr size_t UTD_RATIO = 8; 
-constexpr double VALUE_LOSS_COEFF = 1.0;
-constexpr double ENTROPY_COEFF = 0.005;
-constexpr double MAX_GRAD_NORM = 1000.0;
-constexpr size_t ACCUMULATION_STEPS = 8;
-constexpr int HIDDEN_SIZE = 128;
-constexpr int NUM_HIDDEN_LAYERS = 2;
+/* Training hyperparameters — runtime-configurable via TrainingConfig */
+struct TrainingConfig {
+  size_t replay_buffer_size = 3000000;
+  size_t batch_size         = 262144;
+  double learning_rate      = 3e-4;
+  double ppo_epsilon        = 0.2;
+  size_t utd_ratio          = 8;      /* training iterations per experience collection */
+  double value_loss_coeff   = 0.5;
+  double entropy_coeff      = 0.005;
+  double max_grad_norm      = 1000.0;
+  size_t accumulation_steps = 16;
+  int    hidden_size        = 128;
+  int    num_hidden_layers  = 2;
+};
 
 /* Action space ranges (matching Whisker optimization settings in whisker.hh) */
 constexpr int    WINDOW_INCREMENT_MIN  = 0;
@@ -74,7 +74,7 @@ struct PolicyValueNetImpl : torch::nn::Module {
   torch::nn::Linear policy_wi{nullptr}, policy_wm{nullptr}, policy_is{nullptr};
   torch::nn::Linear value_head{nullptr};
 
-  PolicyValueNetImpl();
+  PolicyValueNetImpl( int hidden_size, int num_hidden_layers );
 
   std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
   forward( torch::Tensor x );
@@ -84,23 +84,24 @@ TORCH_MODULE(PolicyValueNet);
 
 class RatBrain {
 private:
+  TrainingConfig _config;
   torch::Device _device;
   PolicyValueNet _network;
   std::shared_ptr<torch::optim::Adam> _optimizer;
 
   /* Replay buffer stored as flat tensors for vectorized batch indexing */
-  torch::Tensor _buf_obs;          /* [REPLAY_BUFFER_SIZE, INPUT_DIM] float */
-  torch::Tensor _buf_utility;      /* [REPLAY_BUFFER_SIZE] float */
-  torch::Tensor _buf_old_log_prob; /* [REPLAY_BUFFER_SIZE] float */
-  torch::Tensor _buf_action_wi;    /* [REPLAY_BUFFER_SIZE] long */
-  torch::Tensor _buf_action_wm;    /* [REPLAY_BUFFER_SIZE] long */
-  torch::Tensor _buf_action_is;    /* [REPLAY_BUFFER_SIZE] long */
+  torch::Tensor _buf_obs;          /* [replay_buffer_size, INPUT_DIM] float */
+  torch::Tensor _buf_utility;      /* [replay_buffer_size] float */
+  torch::Tensor _buf_old_log_prob; /* [replay_buffer_size] float */
+  torch::Tensor _buf_action_wi;    /* [replay_buffer_size] long */
+  torch::Tensor _buf_action_wm;    /* [replay_buffer_size] long */
+  torch::Tensor _buf_action_is;    /* [replay_buffer_size] long */
 
   size_t _write_pos;
   size_t _buffer_count;
 
 public:
-  RatBrain();
+  RatBrain( const TrainingConfig & config = TrainingConfig() );
 
   ActionResult get_window_and_intersend( const Memory & memory, int current_window );
   void remember_episode( double utility, const std::vector<ObsAction> & observations );

@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#include "CLI11.hpp"
 #include "ratbrain.hh"
 #include "neuralrat.hh"
 #include "configrange.hh"
@@ -17,10 +18,6 @@
 #include "rat-templates.cc"
 
 using namespace std;
-
-/* Default number of times to replicate the config list per collect_experience call,
-   so more total experience is collected per iteration. */
-const unsigned int DEFAULT_NUM_CONFIG_EVALS = 8;
 
 /* ---- Experience collection and main loop ---- */
 
@@ -89,41 +86,51 @@ double collect_experience( RatBrain & brain,
 
 int main( int argc, char *argv[] )
 {
-  RemyBuffers::ConfigRange input_config;
+  CLI::App app{ "Neural Rat Trainer" };
+
+  /* ---- Simulation / IO options ---- */
   string config_filename;
+  app.add_option( "--cf", config_filename, "Input configuration protobuf file" )->required();
+
   string output_filename;
+  app.add_option( "--of", output_filename, "Output checkpoint prefix" );
+
   unsigned int save_every = 0;
-  unsigned int num_config_evals = DEFAULT_NUM_CONFIG_EVALS;
+  app.add_option( "--save-every", save_every, "Save checkpoint every N runs (0 = disabled)" );
 
-  for ( int i = 1; i < argc; i++ ) {
-    string arg( argv[i] );
-    if ( arg.substr( 0, 3 ) == "cf=" ) {
-      config_filename = string( arg.substr( 3 ) );
-      int cfd = open( config_filename.c_str(), O_RDONLY );
-      if ( cfd < 0 ) {
-        perror( "open config file error" );
-        exit( 1 );
-      }
-      if ( !input_config.ParseFromFileDescriptor( cfd ) ) {
-        fprintf( stderr, "Could not parse input config from file %s.\n", config_filename.c_str() );
-        exit( 1 );
-      }
-      if ( close( cfd ) < 0 ) {
-        perror( "close" );
-        exit( 1 );
-      }
-    } else if ( arg.substr( 0, 3 ) == "of=" ) {
-      output_filename = string( arg.substr( 3 ) );
-    } else if ( arg.substr( 0, 11 ) == "save_every=" ) {
-      save_every = stoul( arg.substr( 11 ) );
-    } else if ( arg.substr( 0, 17 ) == "num_config_evals=" ) {
-      num_config_evals = stoul( arg.substr( 17 ) );
-    }
+  unsigned int num_config_evals = 8;
+  app.add_option( "--num-config-evals", num_config_evals, "Times to replicate config grid per iteration" );
+
+  /* ---- Training hyperparameters ---- */
+  TrainingConfig tc;
+
+  app.add_option( "--replay-buffer-size", tc.replay_buffer_size, "Replay buffer capacity" );
+  app.add_option( "--batch-size",         tc.batch_size,         "Effective batch size" );
+  app.add_option( "--lr",                 tc.learning_rate,      "Adam learning rate" );
+  app.add_option( "--ppo-epsilon",        tc.ppo_epsilon,        "PPO clipping epsilon" );
+  app.add_option( "--utd-ratio",          tc.utd_ratio,          "Update-to-data ratio" );
+  app.add_option( "--value-loss-coeff",   tc.value_loss_coeff,   "Value loss coefficient" );
+  app.add_option( "--entropy-coeff",      tc.entropy_coeff,      "Entropy bonus coefficient" );
+  app.add_option( "--max-grad-norm",      tc.max_grad_norm,      "Max gradient norm for clipping" );
+  app.add_option( "--accumulation-steps", tc.accumulation_steps, "Gradient accumulation steps" );
+  app.add_option( "--hidden-size",        tc.hidden_size,        "Hidden layer width" );
+  app.add_option( "--num-hidden-layers",  tc.num_hidden_layers,  "Number of hidden layers" );
+
+  CLI11_PARSE( app, argc, argv );
+
+  /* ---- Load config protobuf ---- */
+  RemyBuffers::ConfigRange input_config;
+  int cfd = open( config_filename.c_str(), O_RDONLY );
+  if ( cfd < 0 ) {
+    perror( "open config file error" );
+    exit( 1 );
   }
-
-  if ( config_filename.empty() ) {
-    fprintf( stderr, "An input configuration protobuf must be provided via the cf= option.\n" );
-    fprintf( stderr, "You can generate one using './configuration'.\n" );
+  if ( !input_config.ParseFromFileDescriptor( cfd ) ) {
+    fprintf( stderr, "Could not parse input config from file %s.\n", config_filename.c_str() );
+    exit( 1 );
+  }
+  if ( close( cfd ) < 0 ) {
+    perror( "close" );
     exit( 1 );
   }
 
@@ -139,16 +146,27 @@ int main( int argc, char *argv[] )
 
   printf( "#######################\n" );
   printf( "Neural Rat Trainer\n" );
-  printf( "  config file:       %s\n", config_filename.c_str() );
-  printf( "  output prefix:     %s\n", output_filename.empty() ? "(none)" : output_filename.c_str() );
-  printf( "  save_every:        %u\n", save_every );
-  printf( "  num_config_evals:  %u\n", num_config_evals );
-  printf( "  base configs:      %zu\n", base_configs.size() );
-  printf( "  total configs:     %zu\n", configs.size() );
-  printf( "  tick_count:        %u\n", tick_count );
+  printf( "  config file:         %s\n", config_filename.c_str() );
+  printf( "  output prefix:       %s\n", output_filename.empty() ? "(none)" : output_filename.c_str() );
+  printf( "  save_every:          %u\n", save_every );
+  printf( "  num_config_evals:    %u\n", num_config_evals );
+  printf( "  base configs:        %zu\n", base_configs.size() );
+  printf( "  total configs:       %zu\n", configs.size() );
+  printf( "  tick_count:          %u\n", tick_count );
+  printf( "  replay_buffer_size:  %zu\n", tc.replay_buffer_size );
+  printf( "  batch_size:          %zu\n", tc.batch_size );
+  printf( "  lr:                  %g\n",  tc.learning_rate );
+  printf( "  ppo_epsilon:         %g\n",  tc.ppo_epsilon );
+  printf( "  utd_ratio:           %zu\n", tc.utd_ratio );
+  printf( "  value_loss_coeff:    %g\n",  tc.value_loss_coeff );
+  printf( "  entropy_coeff:       %g\n",  tc.entropy_coeff );
+  printf( "  max_grad_norm:       %g\n",  tc.max_grad_norm );
+  printf( "  accumulation_steps:  %zu\n", tc.accumulation_steps );
+  printf( "  hidden_size:         %d\n",  tc.hidden_size );
+  printf( "  num_hidden_layers:   %d\n",  tc.num_hidden_layers );
   printf( "#######################\n" );
 
-  RatBrain brain;
+  RatBrain brain( tc );
 
   unsigned int run = 0;
 
