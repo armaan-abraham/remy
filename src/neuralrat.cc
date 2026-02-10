@@ -30,10 +30,10 @@ void NeuralRat::update_window_and_intersend()
   _episode_observations.push_back( result.obs_action );
 }
 
-size_t NeuralRat::episode_done( double utility )
+size_t NeuralRat::episode_done( double utility, unsigned int num_senders )
 {
   size_t episode_size = _episode_observations.size();
-  _brain.remember_episode( utility, _episode_observations );
+  _brain.remember_episode( utility, _episode_observations, num_senders );
   _episode_observations.clear();
   return episode_size;
 }
