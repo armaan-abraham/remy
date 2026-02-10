@@ -39,5 +39,8 @@ Makefile.in
 /libtorch*
 /src/rattrainer
 /checkpoints*
+1x/
+10x/
+20x/
 
 .claude/
