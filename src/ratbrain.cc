@@ -267,3 +267,11 @@ void RatBrain::save( const string & filename ) const
   archive.save_to( filename );
   fprintf( stderr, "Saved model to %s\n", filename.c_str() );
 }
+
+void RatBrain::load( const string & filename )
+{
+  torch::serialize::InputArchive archive;
+  archive.load_from( filename );
+  _network->load( archive );
+  fprintf( stderr, "Loaded model from %s\n", filename.c_str() );
+}

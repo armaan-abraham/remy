@@ -115,6 +115,9 @@ public:
   void remember_episode( double utility, const std::vector<ObsAction> & observations );
   void learn();
   void save( const std::string & filename ) const;
+  void load( const std::string & filename );
+
+  std::string str() const { return "(neural network)"; }
 };
 
 #endif

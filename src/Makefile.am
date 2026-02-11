@@ -27,7 +27,13 @@ remy_SOURCES = $(common_source) remy.cc ratbreeder.cc ratbreeder.hh \
 
 remy_poisson_SOURCES = $(common_source) remy-poisson.cc breeder.cc breeder.hh fishbreeder.cc fishbreeder.hh
 
-sender_runner_SOURCES = $(common_source) sender-runner.cc
+sender_runner_SOURCES = $(common_source) ratbrain.hh ratbrain.cc \
+	neuralrat.cc neuralrat.hh \
+	neural-evaluator.cc \
+	sender-runner.cc
+sender_runner_CPPFLAGS = -std=c++17 -pthread $(protobuf_CFLAGS) -I../protobufs $(LIBTORCH_CXXFLAGS)
+sender_runner_CXXFLAGS = -Wall
+sender_runner_LDADD = $(LDADD) $(LIBTORCH_LIBS)
 
 sender_logger_SOURCES = $(common_source) sender-logger.cc
 
