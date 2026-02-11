@@ -76,6 +76,7 @@ RatBrain::RatBrain( const TrainingConfig & config )
     _buf_action_wi( torch::zeros( {static_cast<long>(config.replay_buffer_size)}, torch::kLong ) ),
     _buf_action_wm( torch::zeros( {static_cast<long>(config.replay_buffer_size)}, torch::kLong ) ),
     _buf_action_is( torch::zeros( {static_cast<long>(config.replay_buffer_size)}, torch::kLong ) ),
+    _buf_num_senders( torch::zeros( {static_cast<long>(config.replay_buffer_size)} ) ),
     _write_pos( 0 ),
     _buffer_count( 0 )
 {
@@ -143,9 +144,9 @@ ActionResult infer_action( PolicyValueNet & net, const Memory & memory, int curr
 }
 
 
-void RatBrain::remember_episode( double utility, const vector<ObsAction> & observations )
+void RatBrain::remember_episode( double utility, const vector<ObsAction> & observations, unsigned int num_senders )
 {
-  cerr << "remember_episode: " << observations.size() << " steps, utility=" << utility << endl;
+  cerr << "remember_episode: " << observations.size() << " steps, utility=" << utility << ", num_senders=" << num_senders << endl;
   for ( const auto & obs : observations ) {
     for ( int j = 0; j < INPUT_DIM; j++ ) {
       _buf_obs[_write_pos][j] = static_cast<float>( obs.observation[j] );
@@ -155,6 +156,7 @@ void RatBrain::remember_episode( double utility, const vector<ObsAction> & obser
     _buf_action_wi[_write_pos] = static_cast<int64_t>( obs.action_wi_idx );
     _buf_action_wm[_write_pos] = static_cast<int64_t>( obs.action_wm_idx );
     _buf_action_is[_write_pos] = static_cast<int64_t>( obs.action_is_idx );
+    _buf_num_senders[_write_pos] = static_cast<float>( num_senders );
 
     _write_pos = ( _write_pos + 1 ) % _config.replay_buffer_size;
     if ( _buffer_count < _config.replay_buffer_size ) _buffer_count++;
@@ -187,6 +189,7 @@ void RatBrain::learn()
       auto action_wi_batch = _buf_action_wi.index_select( 0, mb_indices ).to( _device );
       auto action_wm_batch = _buf_action_wm.index_select( 0, mb_indices ).to( _device );
       auto action_is_batch = _buf_action_is.index_select( 0, mb_indices ).to( _device );
+      auto num_senders_batch = _buf_num_senders.index_select( 0, mb_indices ).to( _device );
 
       /* Forward pass */
       auto output = _network->forward( obs_batch );
@@ -207,21 +210,22 @@ void RatBrain::learn()
       /* Advantage: A(s) = G - V(s), with gamma=1 so G = episode utility */
       auto advantage = utility_batch - values.detach();
 
-      /* PPO clipped surrogate loss */
+      /* PPO clipped surrogate loss (divided by num_senders to correct for
+         configs with more senders contributing more episodes to the buffer) */
       auto ratio = torch::exp( new_log_prob - old_log_prob_batch );
       auto surr1 = ratio * advantage;
       auto surr2 = torch::clamp( ratio, 1.0 - _config.ppo_epsilon, 1.0 + _config.ppo_epsilon ) * advantage;
-      auto policy_loss = -torch::min( surr1, surr2 ).mean();
+      auto policy_loss = -( torch::min( surr1, surr2 ) / num_senders_batch ).mean();
 
       /* Value loss (normalized by mean utility magnitude to keep scale-invariant) */
       auto mean_utility = utility_batch.abs().mean().clamp_min( 1e-6 );
-      auto value_loss = torch::mse_loss( values, utility_batch ) / mean_utility;
+      auto value_loss = ( ( values - utility_batch ).pow( 2 ) / num_senders_batch ).mean() / mean_utility;
 
       /* Entropy bonus */
       auto entropy_wi = -( torch::softmax( logits_wi, 1 ) * log_probs_wi ).sum( 1 );
       auto entropy_wm = -( torch::softmax( logits_wm, 1 ) * log_probs_wm ).sum( 1 );
       auto entropy_is = -( torch::softmax( logits_is, 1 ) * log_probs_is ).sum( 1 );
-      auto entropy = ( entropy_wi + entropy_wm + entropy_is ).mean();
+      auto entropy = ( ( entropy_wi + entropy_wm + entropy_is ) / num_senders_batch ).mean();
 
       /* Scale loss by accumulation steps so gradients average correctly */
       auto loss = ( policy_loss + _config.value_loss_coeff * value_loss - _config.entropy_coeff * entropy )
