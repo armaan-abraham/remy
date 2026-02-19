@@ -68,6 +68,7 @@ class BaseRemyToolRunner(object):
         command = [self.command, "if={:s}".format(remyccfilename)]
         command += ["{}={}".format(rroptname, parameters[paramname]) for rroptname, paramname in
                 self.program_parameters if paramname in parameters]
+        print(command)
         output = subprocess.check_output(command, stderr=subprocess.STDOUT)
         output = output.decode()
         self._write_to_file(command, output, outfile)
@@ -96,6 +97,9 @@ class SenderRunnerRunner(BaseRemyToolRunner):
         ("off", "mean_off"),
         ("buf", "buffer_size"),
         ("time", "sim_time"),
+        ("cf", "cf"),
+        ("hidden_size", "hidden_size"),
+        ("num_hidden_layers", "num_hidden_layers"),
     ]
 
     COMMAND = os.path.join(ROOTDIR, "src", "sender-runner")

@@ -60,7 +60,7 @@ int main( int argc, char *argv[] )
   double mean_off_duration = 5000.0;
   double buffer_size = numeric_limits<unsigned int>::max();
   double stochastic_loss_rate = 0;
-  unsigned int simulation_ticks = 100000;
+  unsigned int simulation_ticks = 1000000;
 
   /* Parse all arguments */
   for ( int i = 1; i < argc; i++ ) {

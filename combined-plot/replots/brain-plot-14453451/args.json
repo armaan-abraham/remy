@@ -1,0 +1,32 @@
+{
+  "args": {
+    "buffer_size": "inf",
+    "cf": "configs/link-1x.cfg",
+    "console_output_files": false,
+    "delay": 150.0,
+    "hidden_size": 32,
+    "link_ppt": [
+      0.237,
+      9.49
+    ],
+    "mean_off": 5000.0,
+    "mean_on": 5000.0,
+    "nsenders": 2,
+    "num_hidden_layers": 2,
+    "num_points": 9,
+    "originals": "originals",
+    "progress_end_char": "\r",
+    "remycc": [
+      "checkpoints-14453451/brain.798"
+    ],
+    "replot": [],
+    "results_dir": "brain-plot-14453451",
+    "sender": "neural",
+    "sender_runner": null
+  },
+  "git": {
+    "describe": "0275ade-dirty"
+  },
+  "machine-name": "orionp1.stanford.edu",
+  "start-time": "Wed Feb 18 19:55:15 2026"
+}

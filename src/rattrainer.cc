@@ -78,13 +78,15 @@ double collect_experience( RatBrain & brain,
 
   /* Collect results from all futures (blocks until each completes) */
   double total_score = 0;
+  double total_futures = 0;
   for ( auto & f : futures ) {
     total_score += f.get();
+    total_futures += 1;
   }
 
   printf( "total_events = %zu\n", total_events );
 
-  return total_score;
+  return total_score / total_futures;
 }
 
 int main( int argc, char *argv[] )
