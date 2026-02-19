@@ -28,6 +28,7 @@ struct TrainingConfig {
   size_t utd_ratio          = 8;      /* training iterations per experience collection */
   double value_loss_coeff   = 0.5;
   double entropy_coeff      = 0.005;
+  double weight_decay       = 0.0;
   double max_grad_norm      = -1.0;  /* -1 for no clipping */
   size_t accumulation_steps = 16;
   int    hidden_size        = 128;
@@ -95,7 +96,7 @@ private:
   TrainingConfig _config;
   torch::Device _device;
   PolicyValueNet _network;
-  std::shared_ptr<torch::optim::Adam> _optimizer;
+  std::shared_ptr<torch::optim::AdamW> _optimizer;
 
   /* Replay buffer stored as flat tensors for vectorized batch indexing */
   torch::Tensor _buf_obs;          /* [replay_buffer_size, INPUT_DIM] float */

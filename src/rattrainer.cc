@@ -116,6 +116,7 @@ int main( int argc, char *argv[] )
   app.add_option( "--utd-ratio",          tc.utd_ratio,          "Update-to-data ratio" );
   app.add_option( "--value-loss-coeff",   tc.value_loss_coeff,   "Value loss coefficient" );
   app.add_option( "--entropy-coeff",      tc.entropy_coeff,      "Entropy bonus coefficient" );
+  app.add_option( "--weight-decay",       tc.weight_decay,       "AdamW weight decay coefficient" );
   app.add_option( "--max-grad-norm",      tc.max_grad_norm,      "Max gradient norm for clipping" );
   app.add_option( "--accumulation-steps", tc.accumulation_steps, "Gradient accumulation steps" );
   app.add_option( "--hidden-size",        tc.hidden_size,        "Hidden layer width" );
@@ -165,6 +166,7 @@ int main( int argc, char *argv[] )
   printf( "  utd_ratio:           %zu\n", tc.utd_ratio );
   printf( "  value_loss_coeff:    %g\n",  tc.value_loss_coeff );
   printf( "  entropy_coeff:       %g\n",  tc.entropy_coeff );
+  printf( "  weight_decay:        %g\n",  tc.weight_decay );
   printf( "  max_grad_norm:       %g\n",  tc.max_grad_norm );
   printf( "  accumulation_steps:  %zu\n", tc.accumulation_steps );
   printf( "  hidden_size:         %d\n",  tc.hidden_size );

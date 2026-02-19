@@ -82,7 +82,9 @@ RatBrain::RatBrain( const TrainingConfig & config )
 {
   assert(_device == torch::kCPU);
   _network->to( _device );
-  _optimizer = make_shared<torch::optim::Adam>( _network->parameters(), config.learning_rate );
+  _optimizer = make_shared<torch::optim::AdamW>(
+    _network->parameters(),
+    torch::optim::AdamWOptions( config.learning_rate ).weight_decay( config.weight_decay ) );
   cerr << "RatBrain using device: " << _device << endl;
 }
 
