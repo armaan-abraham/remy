@@ -176,6 +176,34 @@ void RatBrain::learn()
     auto indices = torch::randint( 0, static_cast<long>(_buffer_count),
                                    {static_cast<long>(_config.batch_size)}, torch::kLong );
 
+    /* First pass: compute advantages across the full batch (no grad needed) */
+    auto all_advantages = torch::empty( {static_cast<long>(_config.batch_size)} );
+    {
+      torch::NoGradGuard no_grad;
+      for ( size_t accum_step = 0; accum_step < _config.accumulation_steps; accum_step++ ) {
+        auto mb_indices = indices.slice( 0,
+          accum_step * mini_batch_size, ( accum_step + 1 ) * mini_batch_size );
+
+        auto obs_batch = _buf_obs.index_select( 0, mb_indices ).to( _device );
+        auto utility_batch = _buf_utility.index_select( 0, mb_indices ).to( _device );
+
+        auto output = _network->forward( obs_batch );
+        auto values = get<3>( output ).squeeze( 1 );
+        TORCH_CHECK( values.size(0) == mini_batch_size, "bad dim 0" );
+        TORCH_CHECK( values.dim() == 1, "Expected 1d" );
+
+        auto advantage = utility_batch - values;
+        all_advantages.slice( 0,
+          accum_step * mini_batch_size, ( accum_step + 1 ) * mini_batch_size ) = advantage;
+      }
+    }
+
+    /* Normalize advantages across the full batch */
+    auto adv_mean = all_advantages.mean();
+    auto adv_std = all_advantages.std().clamp_min( 1e-8 );
+    all_advantages = ( all_advantages - adv_mean ) / adv_std;
+
+    /* Second pass: compute losses with normalized advantages */
     _optimizer->zero_grad();
 
     float accum_loss = 0, accum_entropy = 0, accum_value_loss = 0, accum_policy_loss = 0;
@@ -193,6 +221,10 @@ void RatBrain::learn()
       auto action_is_batch = _buf_action_is.index_select( 0, mb_indices ).to( _device );
       auto num_senders_batch = _buf_num_senders.index_select( 0, mb_indices ).to( _device );
 
+      /* Pre-computed normalized advantages for this mini-batch */
+      auto advantage = all_advantages.slice( 0,
+        accum_step * mini_batch_size, ( accum_step + 1 ) * mini_batch_size ).to( _device );
+
       /* Forward pass */
       auto output = _network->forward( obs_batch );
       auto logits_wi = get<0>( output );
@@ -208,9 +240,6 @@ void RatBrain::learn()
       auto new_log_prob = log_probs_wi.gather( 1, action_wi_batch.unsqueeze( 1 ) ).squeeze( 1 )
                         + log_probs_wm.gather( 1, action_wm_batch.unsqueeze( 1 ) ).squeeze( 1 )
                         + log_probs_is.gather( 1, action_is_batch.unsqueeze( 1 ) ).squeeze( 1 );
-
-      /* Advantage: A(s) = G - V(s), with gamma=1 so G = episode utility */
-      auto advantage = utility_batch - values.detach();
 
       /* PPO clipped surrogate loss (divided by num_senders to correct for
          configs with more senders contributing more episodes to the buffer) */
