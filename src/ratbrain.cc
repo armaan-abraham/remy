@@ -176,8 +176,9 @@ void RatBrain::learn()
     auto indices = torch::randint( 0, static_cast<long>(_buffer_count),
                                    {static_cast<long>(_config.batch_size)}, torch::kLong );
 
-    /* First pass: compute advantages across the full batch (no grad needed) */
+    /* First pass: compute advantages and mean utility across the full batch (no grad needed) */
     auto all_advantages = torch::empty( {static_cast<long>(_config.batch_size)} );
+    auto all_utilities = torch::empty( {static_cast<long>(_config.batch_size)} );
     {
       torch::NoGradGuard no_grad;
       for ( size_t accum_step = 0; accum_step < _config.accumulation_steps; accum_step++ ) {
@@ -195,6 +196,8 @@ void RatBrain::learn()
         auto advantage = utility_batch - values;
         all_advantages.slice( 0,
           accum_step * mini_batch_size, ( accum_step + 1 ) * mini_batch_size ) = advantage;
+        all_utilities.slice( 0,
+          accum_step * mini_batch_size, ( accum_step + 1 ) * mini_batch_size ) = utility_batch;
       }
     }
 
@@ -203,10 +206,14 @@ void RatBrain::learn()
     auto adv_std = all_advantages.std().clamp_min( 1e-8 );
     all_advantages = ( all_advantages - adv_mean ) / adv_std;
 
+    /* Mean utility magnitude across the full batch for value loss normalization */
+    auto mean_utility = all_utilities.abs().mean().clamp_min( 1e-6 );
+
     /* Second pass: compute losses with normalized advantages */
     _optimizer->zero_grad();
 
     float accum_loss = 0, accum_entropy = 0, accum_value_loss = 0, accum_policy_loss = 0;
+    long accum_clipped = 0;
 
     for ( size_t accum_step = 0; accum_step < _config.accumulation_steps; accum_step++ ) {
       /* Slice indices for this mini-batch and load to GPU */
@@ -247,9 +254,9 @@ void RatBrain::learn()
       auto surr1 = ratio * advantage;
       auto surr2 = torch::clamp( ratio, 1.0 - _config.ppo_epsilon, 1.0 + _config.ppo_epsilon ) * advantage;
       auto policy_loss = -( torch::min( surr1, surr2 ) / num_senders_batch ).mean();
+      accum_clipped += (ratio.lt( 1.0 - _config.ppo_epsilon ) | ratio.gt( 1.0 + _config.ppo_epsilon )).sum().item<long>();
 
-      /* Value loss (normalized by mean utility magnitude to keep scale-invariant) */
-      auto mean_utility = utility_batch.abs().mean().clamp_min( 1e-6 );
+      /* Value loss (normalized by mean utility magnitude computed over full batch) */
       auto value_loss = ( ( values - utility_batch ).pow( 2 ) / num_senders_batch ).mean() / mean_utility;
 
       /* Entropy bonus */
@@ -285,13 +292,12 @@ void RatBrain::learn()
     }
     _optimizer->step();
 
-    if ( train_iter == _config.utd_ratio - 1 ) {
-      cerr << "learn: loss=" << accum_loss / _config.accumulation_steps
-           << " entropy=" << accum_entropy / _config.accumulation_steps
-           << " value_loss=" << accum_value_loss / _config.accumulation_steps
-           << " policy_loss=" << accum_policy_loss / _config.accumulation_steps
-           << " grad_norm=" << grad_norm << endl;
-    }
+    cerr << "learn: loss=" << accum_loss / _config.accumulation_steps
+         << " entropy=" << accum_entropy / _config.accumulation_steps
+         << " value_loss=" << accum_value_loss / _config.accumulation_steps
+         << " policy_loss=" << accum_policy_loss / _config.accumulation_steps
+         << " clip_frac=" << static_cast<double>(accum_clipped) / _config.batch_size
+         << " grad_norm=" << grad_norm << endl;
   }
 }
 
