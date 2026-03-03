@@ -201,6 +201,12 @@ void RatBrain::learn()
       }
     }
 
+    /* Explained variance: 1 - Var(utility - values) / Var(utility) */
+    auto var_returns = all_utilities.var();
+    float explained_var = ( var_returns.item<float>() < 1e-8 )
+      ? 0.0f
+      : 1.0f - all_advantages.var().item<float>() / var_returns.item<float>();
+
     /* Normalize advantages across the full batch */
     auto adv_mean = all_advantages.mean();
     auto adv_std = all_advantages.std().clamp_min( 1e-8 );
@@ -297,7 +303,8 @@ void RatBrain::learn()
          << " value_loss=" << accum_value_loss / _config.accumulation_steps
          << " policy_loss=" << accum_policy_loss / _config.accumulation_steps
          << " clip_frac=" << static_cast<double>(accum_clipped) / _config.batch_size
-         << " grad_norm=" << grad_norm << endl;
+         << " grad_norm=" << grad_norm
+         << " explained_var=" << explained_var << endl;
   }
 }
 

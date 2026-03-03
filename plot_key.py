@@ -2,6 +2,7 @@
 """Extract all instances of key=value from a file and plot as a line plot."""
 
 import argparse
+import os
 import re
 import matplotlib
 matplotlib.use("Agg")
@@ -25,7 +26,7 @@ def main():
     parser = argparse.ArgumentParser(description="Extract key=value from a file and plot.")
     parser.add_argument("filepath", help="Path to the log file")
     parser.add_argument("key", help="Key to search for (e.g. 'score')")
-    parser.add_argument("-o", "--output", default=None, help="Output image path (default: <key>.png)")
+    parser.add_argument("-o", "--output-dir", default=None, help="Output directory for plot (filename auto-generated from key and filepath)")
     args = parser.parse_args()
 
     values = extract_values(args.filepath, args.key)
@@ -36,7 +37,14 @@ def main():
 
     print(f"Found {len(values)} values for '{args.key}'")
 
-    out = args.output or f"{args.key}.png"
+    # Build filename: <key>-<sanitized_filepath>.png
+    sanitized = args.filepath.replace(os.sep, "-").replace(".", "-").strip("-")
+    filename = f"{args.key}-{sanitized}.png"
+    if args.output_dir:
+        os.makedirs(args.output_dir, exist_ok=True)
+        out = os.path.join(args.output_dir, filename)
+    else:
+        out = filename
     plt.figure(figsize=(10, 5))
     plt.plot(range(len(values)), values, marker="o", markersize=3, linewidth=1)
     plt.xlabel("Step")
