@@ -5,9 +5,9 @@
 
 using namespace std;
 
-/* ---- PolicyValueNet implementation ---- */
+/* ---- PolicyNet implementation ---- */
 
-PolicyValueNetImpl::PolicyValueNetImpl( int hidden_size, int num_hidden_layers )
+PolicyNetImpl::PolicyNetImpl( int hidden_size, int num_hidden_layers )
   : _hidden_size( hidden_size ), _num_hidden_layers( num_hidden_layers )
 {
   input_proj = register_module( "input_proj", torch::nn::Linear( INPUT_DIM, hidden_size ) );
@@ -25,11 +25,10 @@ PolicyValueNetImpl::PolicyValueNetImpl( int hidden_size, int num_hidden_layers )
   policy_wi = register_module( "policy_wi", torch::nn::Linear( hidden_size, NUM_WINDOW_INCREMENT ) );
   policy_wm = register_module( "policy_wm", torch::nn::Linear( hidden_size, NUM_WINDOW_MULTIPLE ) );
   policy_is = register_module( "policy_is", torch::nn::Linear( hidden_size, NUM_INTERSEND ) );
-  value_head = register_module( "value_head", torch::nn::Linear( hidden_size, 1 ) );
 }
 
-tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
-PolicyValueNetImpl::forward( torch::Tensor x )
+tuple<torch::Tensor, torch::Tensor, torch::Tensor>
+PolicyNetImpl::forward( torch::Tensor x )
 {
   x = torch::gelu( input_proj->forward( x ) );
 
@@ -45,14 +44,13 @@ PolicyValueNetImpl::forward( torch::Tensor x )
   return make_tuple(
     policy_wi->forward( x ),
     policy_wm->forward( x ),
-    policy_is->forward( x ),
-    value_head->forward( x )
+    policy_is->forward( x )
   );
 }
 
-std::shared_ptr<PolicyValueNetImpl> PolicyValueNetImpl::clone_network() const
+std::shared_ptr<PolicyNetImpl> PolicyNetImpl::clone_network() const
 {
-  auto net = std::make_shared<PolicyValueNetImpl>( _hidden_size, _num_hidden_layers );
+  auto net = std::make_shared<PolicyNetImpl>( _hidden_size, _num_hidden_layers );
   torch::NoGradGuard no_grad;
   auto src_params = parameters();
   auto dst_params = net->parameters();
@@ -88,7 +86,7 @@ RatBrain::RatBrain( const TrainingConfig & config )
   cerr << "RatBrain using device: " << _device << endl;
 }
 
-ActionResult infer_action( PolicyValueNet & net, const Memory & memory, int current_window )
+ActionResult infer_action( PolicyNet & net, const Memory & memory, int current_window )
 {
   torch::NoGradGuard no_grad;
 
@@ -176,49 +174,14 @@ void RatBrain::learn()
     auto indices = torch::randint( 0, static_cast<long>(_buffer_count),
                                    {static_cast<long>(_config.batch_size)}, torch::kLong );
 
-    /* First pass: compute advantages and mean utility across the full batch (no grad needed) */
-    auto all_advantages = torch::empty( {static_cast<long>(_config.batch_size)} );
-    auto all_utilities = torch::empty( {static_cast<long>(_config.batch_size)} );
-    {
-      torch::NoGradGuard no_grad;
-      for ( size_t accum_step = 0; accum_step < _config.accumulation_steps; accum_step++ ) {
-        auto mb_indices = indices.slice( 0,
-          accum_step * mini_batch_size, ( accum_step + 1 ) * mini_batch_size );
+    /* GRPO: advantages are just normalized utilities across the full batch */
+    auto all_utilities = _buf_utility.index_select( 0, indices );
+    auto all_advantages = ( all_utilities - all_utilities.mean() ) / all_utilities.std().clamp_min( 1e-8 );
 
-        auto obs_batch = _buf_obs.index_select( 0, mb_indices ).to( _device );
-        auto utility_batch = _buf_utility.index_select( 0, mb_indices ).to( _device );
-
-        auto output = _network->forward( obs_batch );
-        auto values = get<3>( output ).squeeze( 1 );
-        TORCH_CHECK( values.size(0) == mini_batch_size, "bad dim 0" );
-        TORCH_CHECK( values.dim() == 1, "Expected 1d" );
-
-        auto advantage = utility_batch - values;
-        all_advantages.slice( 0,
-          accum_step * mini_batch_size, ( accum_step + 1 ) * mini_batch_size ) = advantage;
-        all_utilities.slice( 0,
-          accum_step * mini_batch_size, ( accum_step + 1 ) * mini_batch_size ) = utility_batch;
-      }
-    }
-
-    /* Explained variance: 1 - Var(utility - values) / Var(utility) */
-    auto var_returns = all_utilities.var();
-    float explained_var = ( var_returns.item<float>() < 1e-8 )
-      ? 0.0f
-      : 1.0f - all_advantages.var().item<float>() / var_returns.item<float>();
-
-    /* Normalize advantages across the full batch */
-    auto adv_mean = all_advantages.mean();
-    auto adv_std = all_advantages.std().clamp_min( 1e-8 );
-    all_advantages = ( all_advantages - adv_mean ) / adv_std;
-
-    /* Mean utility magnitude across the full batch for value loss normalization */
-    auto mean_utility = all_utilities.abs().mean().clamp_min( 1e-6 );
-
-    /* Second pass: compute losses with normalized advantages */
+    /* Compute losses with gradient accumulation */
     _optimizer->zero_grad();
 
-    float accum_loss = 0, accum_entropy = 0, accum_value_loss = 0, accum_policy_loss = 0;
+    float accum_loss = 0, accum_entropy = 0, accum_policy_loss = 0;
     long accum_clipped = 0;
 
     for ( size_t accum_step = 0; accum_step < _config.accumulation_steps; accum_step++ ) {
@@ -227,7 +190,6 @@ void RatBrain::learn()
         accum_step * mini_batch_size, ( accum_step + 1 ) * mini_batch_size );
 
       auto obs_batch = _buf_obs.index_select( 0, mb_indices ).to( _device );
-      auto utility_batch = _buf_utility.index_select( 0, mb_indices ).to( _device );
       auto old_log_prob_batch = _buf_old_log_prob.index_select( 0, mb_indices ).to( _device );
       auto action_wi_batch = _buf_action_wi.index_select( 0, mb_indices ).to( _device );
       auto action_wm_batch = _buf_action_wm.index_select( 0, mb_indices ).to( _device );
@@ -243,7 +205,6 @@ void RatBrain::learn()
       auto logits_wi = get<0>( output );
       auto logits_wm = get<1>( output );
       auto logits_is = get<2>( output );
-      auto values = get<3>( output ).squeeze( 1 );
 
       /* Compute new log probabilities for taken actions */
       auto log_probs_wi = torch::log_softmax( logits_wi, 1 );
@@ -262,9 +223,6 @@ void RatBrain::learn()
       auto policy_loss = -( torch::min( surr1, surr2 ) / num_senders_batch ).mean();
       accum_clipped += (ratio.lt( 1.0 - _config.ppo_epsilon ) | ratio.gt( 1.0 + _config.ppo_epsilon )).sum().item<long>();
 
-      /* Value loss (normalized by mean utility magnitude computed over full batch) */
-      auto value_loss = ( ( values - utility_batch ).pow( 2 ) / num_senders_batch ).mean() / mean_utility;
-
       /* Entropy bonus */
       auto entropy_wi = -( torch::softmax( logits_wi, 1 ) * log_probs_wi ).sum( 1 );
       auto entropy_wm = -( torch::softmax( logits_wm, 1 ) * log_probs_wm ).sum( 1 );
@@ -272,14 +230,13 @@ void RatBrain::learn()
       auto entropy = ( ( entropy_wi + entropy_wm + entropy_is ) / num_senders_batch ).mean();
 
       /* Scale loss by accumulation steps so gradients average correctly */
-      auto loss = ( policy_loss + _config.value_loss_coeff * value_loss - _config.entropy_coeff * entropy )
+      auto loss = ( policy_loss - _config.entropy_coeff * entropy )
                   / static_cast<double>( _config.accumulation_steps );
       loss.backward();
 
       /* Track unscaled metrics for logging */
       accum_loss += loss.item<float>() * _config.accumulation_steps;
       accum_entropy += entropy.item<float>();
-      accum_value_loss += value_loss.item<float>();
       accum_policy_loss += policy_loss.item<float>();
     }
 
@@ -300,11 +257,9 @@ void RatBrain::learn()
 
     cerr << "learn: loss=" << accum_loss / _config.accumulation_steps
          << " entropy=" << accum_entropy / _config.accumulation_steps
-         << " value_loss=" << accum_value_loss / _config.accumulation_steps
          << " policy_loss=" << accum_policy_loss / _config.accumulation_steps
          << " clip_frac=" << static_cast<double>(accum_clipped) / _config.batch_size
-         << " grad_norm=" << grad_norm
-         << " explained_var=" << explained_var << endl;
+         << " grad_norm=" << grad_norm << endl;
   }
 }
 

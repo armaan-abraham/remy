@@ -114,7 +114,6 @@ int main( int argc, char *argv[] )
   app.add_option( "--lr",                 tc.learning_rate,      "Adam learning rate" );
   app.add_option( "--ppo-epsilon",        tc.ppo_epsilon,        "PPO clipping epsilon" );
   app.add_option( "--utd-ratio",          tc.utd_ratio,          "Update-to-data ratio" );
-  app.add_option( "--value-loss-coeff",   tc.value_loss_coeff,   "Value loss coefficient" );
   app.add_option( "--entropy-coeff",      tc.entropy_coeff,      "Entropy bonus coefficient" );
   app.add_option( "--weight-decay",       tc.weight_decay,       "AdamW weight decay coefficient" );
   app.add_option( "--max-grad-norm",      tc.max_grad_norm,      "Max gradient norm for clipping" );
@@ -164,7 +163,6 @@ int main( int argc, char *argv[] )
   printf( "  lr:                  %g\n",  tc.learning_rate );
   printf( "  ppo_epsilon:         %g\n",  tc.ppo_epsilon );
   printf( "  utd_ratio:           %zu\n", tc.utd_ratio );
-  printf( "  value_loss_coeff:    %g\n",  tc.value_loss_coeff );
   printf( "  entropy_coeff:       %g\n",  tc.entropy_coeff );
   printf( "  weight_decay:        %g\n",  tc.weight_decay );
   printf( "  max_grad_norm:       %g\n",  tc.max_grad_norm );

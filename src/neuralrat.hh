@@ -9,7 +9,7 @@
 class NeuralRat : private Rat {
 private:
   RatBrain & _brain;
-  PolicyValueNet _local_network;
+  PolicyNet _local_network;
   std::vector<ObsAction> _episode_observations;
 
   static WhiskerTree & get_dummy_whiskers();

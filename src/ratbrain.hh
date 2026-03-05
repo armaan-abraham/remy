@@ -26,7 +26,7 @@ struct TrainingConfig {
   double learning_rate      = 3e-4;
   double ppo_epsilon        = 0.2;
   size_t utd_ratio          = 8;      /* training iterations per experience collection */
-  double value_loss_coeff   = 0.5;
+
   double entropy_coeff      = 0.005;
   double weight_decay       = 0.0;
   double max_grad_norm      = -1.0;  /* -1 for no clipping */
@@ -67,7 +67,7 @@ struct ActionResult {
   ObsAction obs_action;
 };
 
-struct PolicyValueNetImpl : torch::nn::Module {
+struct PolicyNetImpl : torch::nn::Module {
   int _hidden_size;
   int _num_hidden_layers;
 
@@ -76,26 +76,25 @@ struct PolicyValueNetImpl : torch::nn::Module {
   std::vector<torch::nn::LayerNorm> layer_norms;
   torch::nn::LayerNorm final_norm{nullptr};
   torch::nn::Linear policy_wi{nullptr}, policy_wm{nullptr}, policy_is{nullptr};
-  torch::nn::Linear value_head{nullptr};
 
-  PolicyValueNetImpl( int hidden_size, int num_hidden_layers );
+  PolicyNetImpl( int hidden_size, int num_hidden_layers );
 
-  std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+  std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
   forward( torch::Tensor x );
 
-  std::shared_ptr<PolicyValueNetImpl> clone_network() const;
+  std::shared_ptr<PolicyNetImpl> clone_network() const;
 };
 
-TORCH_MODULE(PolicyValueNet);
+TORCH_MODULE(PolicyNet);
 
-/* Free function: run inference on any PolicyValueNet (used by both RatBrain and NeuralRat) */
-ActionResult infer_action( PolicyValueNet & net, const Memory & memory, int current_window );
+/* Free function: run inference on any PolicyNet (used by both RatBrain and NeuralRat) */
+ActionResult infer_action( PolicyNet & net, const Memory & memory, int current_window );
 
 class RatBrain {
 private:
   TrainingConfig _config;
   torch::Device _device;
-  PolicyValueNet _network;
+  PolicyNet _network;
   std::shared_ptr<torch::optim::AdamW> _optimizer;
 
   /* Replay buffer stored as flat tensors for vectorized batch indexing */
@@ -113,7 +112,7 @@ private:
 public:
   RatBrain( const TrainingConfig & config = TrainingConfig() );
 
-  const PolicyValueNet & network() const { return _network; }
+  const PolicyNet & network() const { return _network; }
   void remember_episode( double utility, const std::vector<ObsAction> & observations, unsigned int num_senders );
   void learn();
   void save( const std::string & filename ) const;
