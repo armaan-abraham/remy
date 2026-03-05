@@ -104,7 +104,7 @@ private:
   torch::Tensor _buf_action_wi;    /* [replay_buffer_size] long */
   torch::Tensor _buf_action_wm;    /* [replay_buffer_size] long */
   torch::Tensor _buf_action_is;    /* [replay_buffer_size] long */
-  torch::Tensor _buf_num_senders;  /* [replay_buffer_size] float */
+  torch::Tensor _buf_total_events;     /* [replay_buffer_size] float — total events across all senders in the rollout */
 
   size_t _write_pos;
   size_t _buffer_count;
@@ -113,7 +113,7 @@ public:
   RatBrain( const TrainingConfig & config = TrainingConfig() );
 
   const PolicyNet & network() const { return _network; }
-  void remember_episode( double utility, const std::vector<ObsAction> & observations, unsigned int num_senders );
+  void remember_episode( double utility, const std::vector<ObsAction> & observations, size_t total_rollout_events );
   void learn();
   void save( const std::string & filename ) const;
   void load( const std::string & filename );

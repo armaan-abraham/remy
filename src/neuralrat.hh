@@ -27,7 +27,8 @@ public:
   using Rat::packets_sent;
   using Rat::state_DNA;
 
-  size_t episode_done( double utility, unsigned int num_senders );
+  size_t observation_count() const { return _episode_observations.size(); }
+  void episode_done( double utility, size_t total_rollout_events );
 };
 
 #endif

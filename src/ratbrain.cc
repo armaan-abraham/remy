@@ -74,7 +74,7 @@ RatBrain::RatBrain( const TrainingConfig & config )
     _buf_action_wi( torch::zeros( {static_cast<long>(config.replay_buffer_size)}, torch::kLong ) ),
     _buf_action_wm( torch::zeros( {static_cast<long>(config.replay_buffer_size)}, torch::kLong ) ),
     _buf_action_is( torch::zeros( {static_cast<long>(config.replay_buffer_size)}, torch::kLong ) ),
-    _buf_num_senders( torch::zeros( {static_cast<long>(config.replay_buffer_size)} ) ),
+    _buf_total_events( torch::zeros( {static_cast<long>(config.replay_buffer_size)} ) ),
     _write_pos( 0 ),
     _buffer_count( 0 )
 {
@@ -144,9 +144,9 @@ ActionResult infer_action( PolicyNet & net, const Memory & memory, int current_w
 }
 
 
-void RatBrain::remember_episode( double utility, const vector<ObsAction> & observations, unsigned int num_senders )
+void RatBrain::remember_episode( double utility, const vector<ObsAction> & observations, size_t total_rollout_events )
 {
-  cerr << "remember_episode: " << observations.size() << " steps, utility=" << utility << ", num_senders=" << num_senders << endl;
+  cerr << "remember_episode: " << observations.size() << " steps, utility=" << utility << ", total_rollout_events=" << total_rollout_events << endl;
   for ( const auto & obs : observations ) {
     for ( int j = 0; j < INPUT_DIM; j++ ) {
       _buf_obs[_write_pos][j] = static_cast<float>( obs.observation[j] );
@@ -156,7 +156,7 @@ void RatBrain::remember_episode( double utility, const vector<ObsAction> & obser
     _buf_action_wi[_write_pos] = static_cast<int64_t>( obs.action_wi_idx );
     _buf_action_wm[_write_pos] = static_cast<int64_t>( obs.action_wm_idx );
     _buf_action_is[_write_pos] = static_cast<int64_t>( obs.action_is_idx );
-    _buf_num_senders[_write_pos] = static_cast<float>( num_senders );
+    _buf_total_events[_write_pos] = static_cast<float>( total_rollout_events );
 
     _write_pos = ( _write_pos + 1 ) % _config.replay_buffer_size;
     if ( _buffer_count < _config.replay_buffer_size ) _buffer_count++;
@@ -194,7 +194,7 @@ void RatBrain::learn()
       auto action_wi_batch = _buf_action_wi.index_select( 0, mb_indices ).to( _device );
       auto action_wm_batch = _buf_action_wm.index_select( 0, mb_indices ).to( _device );
       auto action_is_batch = _buf_action_is.index_select( 0, mb_indices ).to( _device );
-      auto num_senders_batch = _buf_num_senders.index_select( 0, mb_indices ).to( _device );
+      auto total_events_batch = _buf_total_events.index_select( 0, mb_indices ).to( _device );
 
       /* Pre-computed normalized advantages for this mini-batch */
       auto advantage = all_advantages.slice( 0,
@@ -215,19 +215,19 @@ void RatBrain::learn()
                         + log_probs_wm.gather( 1, action_wm_batch.unsqueeze( 1 ) ).squeeze( 1 )
                         + log_probs_is.gather( 1, action_is_batch.unsqueeze( 1 ) ).squeeze( 1 );
 
-      /* PPO clipped surrogate loss (divided by num_senders to correct for
-         configs with more senders contributing more episodes to the buffer) */
+      /* PPO clipped surrogate loss (divided by total_events so each rollout
+         contributes equally regardless of episode length) */
       auto ratio = torch::exp( new_log_prob - old_log_prob_batch );
       auto surr1 = ratio * advantage;
       auto surr2 = torch::clamp( ratio, 1.0 - _config.ppo_epsilon, 1.0 + _config.ppo_epsilon ) * advantage;
-      auto policy_loss = -( torch::min( surr1, surr2 ) / num_senders_batch ).mean();
+      auto policy_loss = -( torch::min( surr1, surr2 ) / total_events_batch ).mean();
       accum_clipped += (ratio.lt( 1.0 - _config.ppo_epsilon ) | ratio.gt( 1.0 + _config.ppo_epsilon )).sum().item<long>();
 
       /* Entropy bonus */
       auto entropy_wi = -( torch::softmax( logits_wi, 1 ) * log_probs_wi ).sum( 1 );
       auto entropy_wm = -( torch::softmax( logits_wm, 1 ) * log_probs_wm ).sum( 1 );
       auto entropy_is = -( torch::softmax( logits_is, 1 ) * log_probs_is ).sum( 1 );
-      auto entropy = ( ( entropy_wi + entropy_wm + entropy_is ) / num_senders_batch ).mean();
+      auto entropy = ( ( entropy_wi + entropy_wm + entropy_is ) / total_events_batch ).mean();
 
       /* Scale loss by accumulation steps so gradients average correctly */
       auto loss = ( policy_loss - _config.entropy_coeff * entropy )

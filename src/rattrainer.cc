@@ -65,9 +65,18 @@ double collect_experience( RatBrain & brain,
             lock_guard<mutex> lock( brain_mutex );
             auto & gang = network.mutable_senders().mutable_gang1();
             unsigned int num_senders = gang.count_senders();
+
+            /* First pass: count total events across all senders in this rollout */
+            size_t rollout_events = 0;
             for ( unsigned int j = 0; j < num_senders; j++ ) {
-              total_events += gang.mutable_sender( j ).mutable_inner_sender().episode_done( sim_utility, num_senders );
+              rollout_events += gang.mutable_sender( j ).mutable_inner_sender().observation_count();
             }
+
+            /* Second pass: store experience with the total rollout event count */
+            for ( unsigned int j = 0; j < num_senders; j++ ) {
+              gang.mutable_sender( j ).mutable_inner_sender().episode_done( sim_utility, rollout_events );
+            }
+            total_events += rollout_events;
           }
 
           return sim_utility;
