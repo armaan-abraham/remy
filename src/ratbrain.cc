@@ -17,14 +17,9 @@ PolicyNetImpl::PolicyNetImpl( int hidden_size, int num_hidden_layers )
   input_proj = register_module( "input_proj", torch::nn::Linear( INPUT_DIM, hidden_size ) );
 
   for ( int i = 0; i < num_hidden_layers; i++ ) {
-    layer_norms.push_back( register_module( "ln" + to_string( i ),
-      torch::nn::LayerNorm( torch::nn::LayerNormOptions( {hidden_size} ) ) ) );
     hidden_layers.push_back( register_module( "fc" + to_string( i ),
       torch::nn::Linear( hidden_size, hidden_size ) ) );
   }
-
-  final_norm = register_module( "final_norm",
-    torch::nn::LayerNorm( torch::nn::LayerNormOptions( {hidden_size} ) ) );
 
   policy_wi = register_module( "policy_wi", torch::nn::Linear( hidden_size, NUM_WINDOW_INCREMENT ) );
   policy_wm = register_module( "policy_wm", torch::nn::Linear( hidden_size, NUM_WINDOW_MULTIPLE ) );
@@ -57,12 +52,9 @@ PolicyNetImpl::forward( torch::Tensor x )
 
   for ( size_t i = 0; i < hidden_layers.size(); i++ ) {
     auto residual = x;
-    x = layer_norms[i]->forward( x );
     x = torch::gelu( hidden_layers[i]->forward( x ) );
     x = x + residual;
   }
-
-  x = final_norm->forward( x );
 
   return make_tuple(
     policy_wi->forward( x ),

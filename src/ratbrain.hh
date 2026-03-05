@@ -78,8 +78,6 @@ struct PolicyNetImpl : torch::nn::Module {
 
   torch::nn::Linear input_proj{nullptr};
   std::vector<torch::nn::Linear> hidden_layers;
-  std::vector<torch::nn::LayerNorm> layer_norms;
-  torch::nn::LayerNorm final_norm{nullptr};
   torch::nn::Linear policy_wi{nullptr}, policy_wm{nullptr}, policy_is{nullptr};
 
   PolicyNetImpl( int hidden_size, int num_hidden_layers );
