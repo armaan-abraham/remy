@@ -40,6 +40,7 @@ void PolicyNetImpl::update_obs_stats( torch::Tensor batch )
   obs_var.copy_( ( obs_var * old_count + batch_var * batch_count
                    + delta * delta * ( old_count * batch_count / new_count ) ) / new_count );
   obs_count.fill_( new_count );
+
 }
 
 tuple<torch::Tensor, torch::Tensor, torch::Tensor>
@@ -293,11 +294,16 @@ void RatBrain::learn()
     }
     _optimizer->step();
 
+    auto obs_std = _network->obs_var.sqrt();
     cerr << "learn: loss=" << accum_loss / _config.accumulation_steps
          << " entropy=" << accum_entropy / _config.accumulation_steps
          << " policy_loss=" << accum_policy_loss / _config.accumulation_steps
          << " clip_frac=" << static_cast<double>(accum_clipped) / _config.batch_size
-         << " grad_norm=" << grad_norm << endl;
+         << " grad_norm=" << grad_norm
+         << " obs_mean=[" << _network->obs_mean[0].item<float>() << ", " << _network->obs_mean[1].item<float>()
+         << ", " << _network->obs_mean[2].item<float>() << ", " << _network->obs_mean[3].item<float>()
+         << "] obs_std=[" << obs_std[0].item<float>() << ", " << obs_std[1].item<float>()
+         << ", " << obs_std[2].item<float>() << ", " << obs_std[3].item<float>() << "]" << endl;
   }
 }
 
