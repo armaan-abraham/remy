@@ -10,6 +10,10 @@ using namespace std;
 PolicyNetImpl::PolicyNetImpl( int hidden_size, int num_hidden_layers )
   : _hidden_size( hidden_size ), _num_hidden_layers( num_hidden_layers )
 {
+  obs_mean  = register_buffer( "obs_mean",  torch::zeros( {INPUT_DIM} ) );
+  obs_var   = register_buffer( "obs_var",   torch::ones( {INPUT_DIM} ) );
+  obs_count = register_buffer( "obs_count", torch::zeros( {1} ) );
+
   input_proj = register_module( "input_proj", torch::nn::Linear( INPUT_DIM, hidden_size ) );
 
   for ( int i = 0; i < num_hidden_layers; i++ ) {
@@ -27,9 +31,28 @@ PolicyNetImpl::PolicyNetImpl( int hidden_size, int num_hidden_layers )
   policy_is = register_module( "policy_is", torch::nn::Linear( hidden_size, NUM_INTERSEND ) );
 }
 
+void PolicyNetImpl::update_obs_stats( torch::Tensor batch )
+{
+  /* Welford's parallel/batch update: merge batch stats into running stats */
+  auto batch_mean  = batch.mean( 0 );
+  auto batch_var   = batch.var( 0, /*unbiased=*/false );
+  auto batch_count = static_cast<double>( batch.size( 0 ) );
+  auto old_count   = obs_count.item<double>();
+  auto new_count   = old_count + batch_count;
+
+  auto delta = batch_mean - obs_mean;
+  obs_mean.add_( delta * ( batch_count / new_count ) );
+  obs_var.copy_( ( obs_var * old_count + batch_var * batch_count
+                   + delta * delta * ( old_count * batch_count / new_count ) ) / new_count );
+  obs_count.fill_( new_count );
+}
+
 tuple<torch::Tensor, torch::Tensor, torch::Tensor>
 PolicyNetImpl::forward( torch::Tensor x )
 {
+  /* Normalize input by running mean/std (per-dimension) */
+  x = ( x - obs_mean ) / ( obs_var.sqrt() + 1e-8 );
+
   x = torch::gelu( input_proj->forward( x ) );
 
   for ( size_t i = 0; i < hidden_layers.size(); i++ ) {
@@ -52,10 +75,17 @@ std::shared_ptr<PolicyNetImpl> PolicyNetImpl::clone_network() const
 {
   auto net = std::make_shared<PolicyNetImpl>( _hidden_size, _num_hidden_layers );
   torch::NoGradGuard no_grad;
+  /* Copy parameters */
   auto src_params = parameters();
   auto dst_params = net->parameters();
   for ( size_t i = 0; i < src_params.size(); i++ ) {
     dst_params[i].copy_( src_params[i] );
+  }
+  /* Copy buffers (running observation stats) */
+  auto src_bufs = buffers();
+  auto dst_bufs = net->buffers();
+  for ( size_t i = 0; i < src_bufs.size(); i++ ) {
+    dst_bufs[i].copy_( src_bufs[i] );
   }
   net->eval();
   return net;
@@ -147,6 +177,16 @@ ActionResult infer_action( PolicyNet & net, const Memory & memory, int current_w
 void RatBrain::remember_episode( double utility, const vector<ObsAction> & observations, size_t total_rollout_events )
 {
   cerr << "remember_episode: " << observations.size() << " steps, utility=" << utility << ", total_rollout_events=" << total_rollout_events << endl;
+
+  /* Build observation tensor for batch stats update */
+  auto obs_tensor = torch::zeros( {static_cast<long>( observations.size() ), INPUT_DIM} );
+  for ( size_t i = 0; i < observations.size(); i++ ) {
+    for ( int j = 0; j < INPUT_DIM; j++ ) {
+      obs_tensor[i][j] = static_cast<float>( observations[i].observation[j] );
+    }
+  }
+  _network->update_obs_stats( obs_tensor );
+
   for ( const auto & obs : observations ) {
     for ( int j = 0; j < INPUT_DIM; j++ ) {
       _buf_obs[_write_pos][j] = static_cast<float>( obs.observation[j] );
@@ -177,6 +217,10 @@ void RatBrain::learn()
     /* GRPO: advantages are just normalized utilities across the full batch */
     auto all_utilities = _buf_utility.index_select( 0, indices );
     auto all_advantages = ( all_utilities - all_utilities.mean() ) / all_utilities.std().clamp_min( 1e-8 );
+
+    /* Compute average total_events across the full batch for reweighting */
+    auto all_total_events = _buf_total_events.index_select( 0, indices );
+    auto avg_total_events = all_total_events.mean();
 
     /* Compute losses with gradient accumulation */
     _optimizer->zero_grad();
@@ -215,19 +259,21 @@ void RatBrain::learn()
                         + log_probs_wm.gather( 1, action_wm_batch.unsqueeze( 1 ) ).squeeze( 1 )
                         + log_probs_is.gather( 1, action_is_batch.unsqueeze( 1 ) ).squeeze( 1 );
 
-      /* PPO clipped surrogate loss (divided by total_events so each rollout
-         contributes equally regardless of episode length) */
+      /* PPO clipped surrogate loss: divide by total_events (per-rollout normalization)
+         and by num_senders (per-sender normalization), multiply by avg_num_senders
+         to keep gradient scale consistent across configs */
       auto ratio = torch::exp( new_log_prob - old_log_prob_batch );
       auto surr1 = ratio * advantage;
       auto surr2 = torch::clamp( ratio, 1.0 - _config.ppo_epsilon, 1.0 + _config.ppo_epsilon ) * advantage;
-      auto policy_loss = -( torch::min( surr1, surr2 ) / total_events_batch ).mean();
+      auto per_sample_weight = avg_total_events / total_events_batch;
+      auto policy_loss = -( torch::min( surr1, surr2 ) * per_sample_weight ).mean();
       accum_clipped += (ratio.lt( 1.0 - _config.ppo_epsilon ) | ratio.gt( 1.0 + _config.ppo_epsilon )).sum().item<long>();
 
       /* Entropy bonus */
       auto entropy_wi = -( torch::softmax( logits_wi, 1 ) * log_probs_wi ).sum( 1 );
       auto entropy_wm = -( torch::softmax( logits_wm, 1 ) * log_probs_wm ).sum( 1 );
       auto entropy_is = -( torch::softmax( logits_is, 1 ) * log_probs_is ).sum( 1 );
-      auto entropy = ( ( entropy_wi + entropy_wm + entropy_is ) / total_events_batch ).mean();
+      auto entropy = ( ( entropy_wi + entropy_wm + entropy_is ) * per_sample_weight ).mean();
 
       /* Scale loss by accumulation steps so gradients average correctly */
       auto loss = ( policy_loss - _config.entropy_coeff * entropy )

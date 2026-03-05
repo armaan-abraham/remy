@@ -71,6 +71,11 @@ struct PolicyNetImpl : torch::nn::Module {
   int _hidden_size;
   int _num_hidden_layers;
 
+  /* Running observation normalization (registered buffers — saved/loaded automatically) */
+  torch::Tensor obs_mean;
+  torch::Tensor obs_var;
+  torch::Tensor obs_count;
+
   torch::nn::Linear input_proj{nullptr};
   std::vector<torch::nn::Linear> hidden_layers;
   std::vector<torch::nn::LayerNorm> layer_norms;
@@ -78,6 +83,9 @@ struct PolicyNetImpl : torch::nn::Module {
   torch::nn::Linear policy_wi{nullptr}, policy_wm{nullptr}, policy_is{nullptr};
 
   PolicyNetImpl( int hidden_size, int num_hidden_layers );
+
+  /* Update running mean/var with a batch of observations [N, INPUT_DIM] */
+  void update_obs_stats( torch::Tensor batch );
 
   std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
   forward( torch::Tensor x );
