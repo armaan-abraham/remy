@@ -2,19 +2,19 @@
 #SBATCH --job-name=remy-cca
 #SBATCH --account=iris
 #SBATCH --partition=sc-freecpu
-#SBATCH --time=150:00:00
+#SBATCH --time=200:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=18
-#SBATCH --mem=18G
+#SBATCH --cpus-per-task=24
+#SBATCH --mem-per-cpu=2G
 #SBATCH --output=/iris/u/armaana/jobs/logs/remy_%j.out
 #SBATCH --error=/iris/u/armaana/jobs/logs/remy_%j.err
 
 
 # Constants - Configure these for your specific run
 WORK_DIR="/iris/u/armaana/remy"
-OUTPUT_DIR="20x-4s"
-CONFIG_FILE="link-20x-4s.cfg"
+OUTPUT_DIR="20x-2src"
+CONFIG_FILE="link-20x.cfg"
 OUTPUT_PREFIX="cca"
 
 # Change to working directory
