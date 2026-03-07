@@ -49,6 +49,8 @@ public:
       id( s_id )
   {}
 
+  SenderType & mutable_inner_sender() { return sender; }
+
   virtual ~SwitchedSender() {}
 };
 

@@ -667,6 +667,9 @@ BUILD_GRAPH_FALSE
 BUILD_GRAPH_TRUE
 PICKY_CXXFLAGS
 CXX11_FLAGS
+LIBTORCH_LIBS
+LIBTORCH_CXXFLAGS
+LIBTORCH_PREFIX
 protobuf_LIBS
 protobuf_CFLAGS
 PKG_CONFIG_LIBDIR
@@ -4271,6 +4274,21 @@ else
 printf "%s\n" "yes" >&6; }
 
 fi
+# Protobuf 3.13.0 (matching LibTorch's bundled version) triggers -Weffc++; -isystem suppresses this
+protobuf_CFLAGS=$(echo "$protobuf_CFLAGS" | sed 's/-I/-isystem /g')
+# Extract -L path from protobuf_LIBS and embed as rpath
+protobuf_LIBDIR=$(echo "$protobuf_LIBS" | grep -o '\-L[^ ]*' | sed 's/^-L//')
+if test -n "$protobuf_LIBDIR"; then
+  protobuf_LIBS="$protobuf_LIBS -Wl,-rpath,$protobuf_LIBDIR"
+fi
+
+# LibTorch configuration
+LIBTORCH_PREFIX="${PWD}/libtorch"
+LIBTORCH_CXXFLAGS="-isystem${LIBTORCH_PREFIX}/include -isystem${LIBTORCH_PREFIX}/include/torch/csrc/api/include"
+LIBTORCH_LIBS="-L${LIBTORCH_PREFIX}/lib -Wl,-rpath,${LIBTORCH_PREFIX}/lib -ltorch -Wl,--no-as-needed -ltorch_cuda -lc10_cuda -Wl,--as-needed -ltorch_cpu -lc10"
+
+
+
 
 # Add compiler flags
 CXX11_FLAGS="-std=c++11 -pthread"

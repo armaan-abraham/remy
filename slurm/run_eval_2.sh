@@ -13,9 +13,9 @@
 
 
 
-. /iris/u/armaana/remy-rl/.venv/bin/activate
-cd /iris/u/armaana/remy
-python ./scripts/plot.py 20x-2src/cca.19 --link-ppt 0.237 9.49 --num-points 9 --delay 150 --nsenders 2  --mean-on 5000 --mean-off 5000 --results-dir plot-20x-2src-1e6 --no-console-output-files
+cd /iris/u/armaana/remy-rl
+. .venv/bin/activate
+python ./scripts/plot.py checkpoints-14453453/brain.751 --link-ppt 0.237 9.49 --num-points 9 --delay 150 --nsenders 2 --mean-on 5000 --mean-off 5000 --results-dir brain-plot-14453453 --no-console-output-files --cf configs/link-1x.cfg --hidden-size 64 --num-hidden-layers 2 --sender neural
 
 
 

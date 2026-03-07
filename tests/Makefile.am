@@ -21,3 +21,11 @@ TESTS = maintain-2013-results \
 	verify-2014-401.test \
 	verify-2014-802.test \
 	run-plot-script.py
+
+# LibTorch test program
+check_PROGRAMS = libtorch-test
+
+libtorch_test_SOURCES = libtorch-test.cc
+libtorch_test_CPPFLAGS = $(LIBTORCH_CXXFLAGS)
+libtorch_test_CXXFLAGS = -std=c++17 -pthread
+libtorch_test_LDADD = $(LIBTORCH_LIBS)

@@ -1,8 +1,8 @@
-AM_CPPFLAGS = $(CXX11_FLAGS) -I../protobufs
+AM_CPPFLAGS = $(CXX11_FLAGS) $(protobuf_CFLAGS) -I../protobufs
 AM_CXXFLAGS = $(PICKY_CXXFLAGS)
 LDADD = ../protobufs/libremyprotos.a -lm $(protobuf_LIBS)
 
-bin_PROGRAMS = remy remy-poisson sender-runner sender-logger scoring-example configuration inspect-config inspect-simulationsdata
+bin_PROGRAMS = remy remy-poisson sender-runner sender-logger scoring-example configuration inspect-config inspect-simulationsdata rattrainer
 
 common_source = delay.hh evaluator.cc evaluator.hh                 \
 	exponential.hh link.hh link-templates.cc stochastic-loss.hh                      \
@@ -27,7 +27,13 @@ remy_SOURCES = $(common_source) remy.cc ratbreeder.cc ratbreeder.hh \
 
 remy_poisson_SOURCES = $(common_source) remy-poisson.cc breeder.cc breeder.hh fishbreeder.cc fishbreeder.hh
 
-sender_runner_SOURCES = $(common_source) sender-runner.cc
+sender_runner_SOURCES = $(common_source) ratbrain.hh ratbrain.cc \
+	neuralrat.cc neuralrat.hh \
+	neural-evaluator.cc \
+	sender-runner.cc
+sender_runner_CPPFLAGS = -std=c++17 -pthread $(protobuf_CFLAGS) -I../protobufs $(LIBTORCH_CXXFLAGS)
+sender_runner_CXXFLAGS = -Wall
+sender_runner_LDADD = $(LDADD) $(LIBTORCH_LIBS)
 
 sender_logger_SOURCES = $(common_source) sender-logger.cc
 
@@ -38,4 +44,11 @@ configuration_SOURCES = input-configrange.cc
 inspect_config_SOURCES = inspect-configrange.cc
 
 inspect_simulationsdata_SOURCES = inspect-simulationsdata.cc
+
+rattrainer_SOURCES = $(common_source) ratbrain.hh ratbrain.cc \
+	neuralrat.cc neuralrat.hh \
+	rattrainer.cc
+rattrainer_CPPFLAGS = -std=c++17 -pthread $(protobuf_CFLAGS) -I../protobufs $(LIBTORCH_CXXFLAGS)
+rattrainer_CXXFLAGS = -Wall
+rattrainer_LDADD = $(LDADD) $(LIBTORCH_LIBS)
 

@@ -35,3 +35,13 @@ Makefile.in
 /src/remy-poisson
 /graph/ratatouille
 /src/scoring-example
+/src/libtorch-test
+/libtorch*
+/src/rattrainer
+/checkpoints*
+1x/
+10x/
+20x/
+
+.claude/
+plots/

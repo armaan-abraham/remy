@@ -9,10 +9,14 @@
 
 #include "evaluator.hh"
 #include "configrange.hh"
+#include "ratbrain.hh"
+#include "neuralrat.hh"
 using namespace std;
 
+enum class SenderType { WHISKER, POISSON, NEURAL };
+
 template <typename T>
-void print_tree(T & tree) 
+void print_tree(T & tree)
 {
   if ( tree.has_config() ) {
     printf( "Prior assumptions:\n%s\n\n", tree.config().DebugString().c_str() );
@@ -24,7 +28,7 @@ void print_tree(T & tree)
 }
 
 template <typename T>
-void parse_outcome( T & outcome ) 
+void parse_outcome( T & outcome )
 {
   printf( "score = %f\n", outcome.score );
   double norm_score = 0;
@@ -44,9 +48,11 @@ void parse_outcome( T & outcome )
 
 int main( int argc, char *argv[] )
 {
-  WhiskerTree whiskers;
-  FinTree fins;
-  bool is_poisson = false;
+  SenderType sender_type = SenderType::WHISKER;
+  string input_filename;
+  string config_filename;
+  int hidden_size = 128;
+  int num_hidden_layers = 2;
   unsigned int num_senders = 2;
   double link_ppt = 1.0;
   double delay = 100.0;
@@ -56,48 +62,26 @@ int main( int argc, char *argv[] )
   double stochastic_loss_rate = 0;
   unsigned int simulation_ticks = 1000000;
 
-  for ( int i = 1; i < argc && !is_poisson; i++ ) {
-    string arg( argv[ i ] );
-    if ( arg.substr( 0, 7) == "sender=" ) {
-        string sender_type( arg.substr( 7 ) );
-        if ( sender_type == "poisson" ) {
-          is_poisson = true;
-          fprintf( stderr, "Running poisson sender\n" );
-        }
-    } 
-  }
+  /* Parse all arguments */
   for ( int i = 1; i < argc; i++ ) {
-     string arg( argv[ i ] );
-     if ( arg.substr( 0, 3 ) == "if=" ) {
-      string filename( arg.substr( 3 ) );
-      int fd = open( filename.c_str(), O_RDONLY );
-      if ( fd < 0 ) {
-        perror( "open" );
-        exit( 1 );
+    string arg( argv[ i ] );
+    if ( arg.substr( 0, 7 ) == "sender=" ) {
+      string type_str( arg.substr( 7 ) );
+      if ( type_str == "poisson" ) {
+        sender_type = SenderType::POISSON;
+        fprintf( stderr, "Running poisson sender\n" );
+      } else if ( type_str == "neural" ) {
+        sender_type = SenderType::NEURAL;
+        fprintf( stderr, "Running neural sender\n" );
       }
-
-      if ( is_poisson ) {
-        RemyBuffers::FinTree tree;
-        if ( !tree.ParseFromFileDescriptor( fd ) ) {
-          fprintf( stderr, "Could not parse %s.\n", filename.c_str() );
-          exit( 1 );
-        }
-        fins = FinTree( tree );
-        print_tree< RemyBuffers::FinTree >(tree);
-      } else {
-        RemyBuffers::WhiskerTree tree;
-        if ( !tree.ParseFromFileDescriptor( fd ) ) {
-          fprintf( stderr, "Could not parse %s.\n", filename.c_str() );
-          exit( 1 );
-        }
-        whiskers = WhiskerTree( tree );  
-        print_tree< RemyBuffers::WhiskerTree >(tree);
-      }
-
-      if ( close( fd ) < 0 ) {
-        perror( "close" );
-        exit( 1 );
-      }
+    } else if ( arg.substr( 0, 3 ) == "if=" ) {
+      input_filename = arg.substr( 3 );
+    } else if ( arg.substr( 0, 3 ) == "cf=" ) {
+      config_filename = arg.substr( 3 );
+    } else if ( arg.substr( 0, 12 ) == "hidden_size=" ) {
+      hidden_size = atoi( arg.substr( 12 ).c_str() );
+    } else if ( arg.substr( 0, 18 ) == "num_hidden_layers=" ) {
+      num_hidden_layers = atoi( arg.substr( 18 ).c_str() );
     } else if ( arg.substr( 0, 5 ) == "nsrc=" ) {
       num_senders = atoi( arg.substr( 5 ).c_str() );
       fprintf( stderr, "Setting num_senders to %d\n", num_senders );
@@ -135,14 +119,77 @@ int main( int argc, char *argv[] )
   configuration_range.stochastic_loss_rate = Range( stochastic_loss_rate, stochastic_loss_rate, 0);
   configuration_range.simulation_ticks = simulation_ticks;
 
-  if ( is_poisson ) {
-    Evaluator< FinTree > eval( configuration_range );
-    auto outcome = eval.score( fins, false, 10 );
-    parse_outcome< Evaluator< FinTree >::Outcome > ( outcome );
+  if ( sender_type == SenderType::NEURAL ) {
+    /* Print prior assumptions from training config file */
+    if ( !config_filename.empty() ) {
+      int cfd = open( config_filename.c_str(), O_RDONLY );
+      if ( cfd < 0 ) {
+        perror( "open config file" );
+        exit( 1 );
+      }
+      RemyBuffers::ConfigRange input_config;
+      if ( !input_config.ParseFromFileDescriptor( cfd ) ) {
+        fprintf( stderr, "Could not parse config from %s.\n", config_filename.c_str() );
+        exit( 1 );
+      }
+      if ( close( cfd ) < 0 ) {
+        perror( "close" );
+        exit( 1 );
+      }
+      printf( "Prior assumptions:\n%s\n\n", input_config.DebugString().c_str() );
+    }
+
+    /* Load neural model */
+    TrainingConfig tc;
+    tc.hidden_size = hidden_size;
+    tc.num_hidden_layers = num_hidden_layers;
+    tc.replay_buffer_size = 1; /* inference only */
+
+    RatBrain brain( tc );
+    brain.load( input_filename );
+
+    Evaluator< RatBrain > eval( configuration_range );
+    auto outcome = eval.score( brain, false, 10 );
+    parse_outcome< Evaluator< RatBrain >::Outcome >( outcome );
   } else {
-    Evaluator< WhiskerTree > eval( configuration_range );
-    auto outcome = eval.score( whiskers, false, 10 );
-    parse_outcome< Evaluator< WhiskerTree >::Outcome > ( outcome );
+    /* Load protobuf input file (whisker or poisson) */
+    RemyBuffers::WhiskerTree whisker_tree_proto;
+    RemyBuffers::FinTree fin_tree_proto;
+
+    int fd = open( input_filename.c_str(), O_RDONLY );
+    if ( fd < 0 ) {
+      perror( "open" );
+      exit( 1 );
+    }
+
+    bool parsed = ( sender_type == SenderType::POISSON )
+      ? fin_tree_proto.ParseFromFileDescriptor( fd )
+      : whisker_tree_proto.ParseFromFileDescriptor( fd );
+    if ( !parsed ) {
+      fprintf( stderr, "Could not parse %s.\n", input_filename.c_str() );
+      exit( 1 );
+    }
+
+    if ( close( fd ) < 0 ) {
+      perror( "close" );
+      exit( 1 );
+    }
+
+    if ( sender_type == SenderType::POISSON ) {
+      print_tree< RemyBuffers::FinTree >( fin_tree_proto );
+      FinTree fins( fin_tree_proto );
+
+      Evaluator< FinTree > eval( configuration_range );
+      auto outcome = eval.score( fins, false, 10 );
+      parse_outcome< Evaluator< FinTree >::Outcome >( outcome );
+    } else {
+      print_tree< RemyBuffers::WhiskerTree >( whisker_tree_proto );
+      WhiskerTree whiskers( whisker_tree_proto );
+
+      Evaluator< WhiskerTree > eval( configuration_range );
+      auto outcome = eval.score( whiskers, false, 10 );
+      parse_outcome< Evaluator< WhiskerTree >::Outcome >( outcome );
+    }
   }
 
   return 0;

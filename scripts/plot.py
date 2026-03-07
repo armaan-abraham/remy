@@ -134,10 +134,10 @@ class BaseRemyCCPerformancePlotGenerator:
             warn("No senders found in this output.")
 
         link_ppt_prior_matches = cls.LINK_PPT_PRIOR_REGEX.findall(result)
-        if len(link_ppt_prior_matches) != 1:
-            print(result)
-            raise RuntimeError("Found no or duplicate link packets per ms prior assumptions in this output.")
-        link_ppt_prior = tuple(map(float, link_ppt_prior_matches[0]))
+        if len(link_ppt_prior_matches) == 1:
+            link_ppt_prior = tuple(map(float, link_ppt_prior_matches[0]))
+        else:
+            link_ppt_prior = None
 
         # Divide norm_score the number of senders (sender-runner returns the sum)
         norm_score /= len(sender_data)
@@ -145,6 +145,8 @@ class BaseRemyCCPerformancePlotGenerator:
         return norm_score, sender_data, link_ppt_prior
 
     def _update_link_ppt_prior(self, link_ppt_prior):
+        if link_ppt_prior is None:
+            return
         if link_ppt_prior in self._link_ppt_priors:
             return
         self._link_ppt_priors.append(link_ppt_prior)
@@ -292,8 +294,8 @@ def make_results_dir(dirname):
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("remycc", nargs="*", type=str,
     help="RemyCC file(s) to run, can also use e.g. name.[5:5:30] to do name.5, name.10, ..., name.30")
-parser.add_argument("--sender", type=str, default="",
-    help="Indicate that we are running poisson senders. ")
+parser.add_argument("--sender", type=str, default=None,
+    help="Sender type: 'poisson' or 'neural' (default: whisker)")
 parser.add_argument("-R", "--replot", type=str, action="append", default=[],
     help="Replot results in this directory from output files (can be specified multiple times)")
 parser.add_argument("-n", "--num-points", type=int, default=1000,
@@ -311,6 +313,12 @@ parser.add_argument("--sender-runner", type=str, default=None,
 parser.add_argument("--newlines", action="store_const", dest="progress_end_char", const='\n', default='\r',
     help="Print newlines (\\n) instead of carriage returns (\\r) when reporting progress")
 senderrunner_group = parser.add_argument_group("sender-runner arguments")
+senderrunner_group.add_argument("--cf", type=str, default=None,
+    help="Training config protobuf file (for prior assumptions on plot)")
+senderrunner_group.add_argument("--hidden-size", type=int, default=None, dest="hidden_size",
+    help="Hidden layer width of the neural model (default 128)")
+senderrunner_group.add_argument("--num-hidden-layers", type=int, default=None, dest="num_hidden_layers",
+    help="Number of hidden layers in the neural model (default 2)")
 senderrunner_group.add_argument("-s", "--nsenders", type=int, default=2,
     help="Number of senders")
 senderrunner_group.add_argument("-d", "--delay", type=float, default=150.0,
@@ -347,8 +355,18 @@ utils.log_arguments(results_dirname, args)
 
 # Generate parameters
 link_ppt_range = np.logspace(np.log10(args.link_ppt[0]), np.log10(args.link_ppt[1]), args.num_points)
-parameter_keys = ["sender", "nsenders", "delay", "mean_on", "mean_off", "buffer_size"]
+parameter_keys = ["nsenders", "delay", "mean_on", "mean_off", "buffer_size"]
 parameters = {key: getattr(args, key) for key in parameter_keys}
+
+if args.sender:
+    parameters["sender"] = args.sender
+if args.cf:
+    parameters["cf"] = args.cf
+if args.hidden_size is not None:
+    parameters["hidden_size"] = args.hidden_size
+if args.num_hidden_layers is not None:
+    parameters["num_hidden_layers"] = args.num_hidden_layers
+
 remyccfiles = generate_remyccs_list(args.remycc)
 
 ax = plt.axes()
@@ -383,8 +401,12 @@ if os.path.isdir(args.originals):
 # If all RemyCCs had the same training range, plot it on the graph.
 if len(link_ppt_priors) == 1:
     link_ppt_low, link_ppt_high = link_ppt_priors[0]
-    plt.axvspan(LINK_PPT_TO_MBPS_CONVERSION*link_ppt_low, LINK_PPT_TO_MBPS_CONVERSION*link_ppt_high,
-            linewidth=0.0, facecolor="0.2", alpha=0.2)
+    if link_ppt_low == link_ppt_high:
+        plt.axvline(LINK_PPT_TO_MBPS_CONVERSION*link_ppt_low,
+                color="0.2", linestyle="--", alpha=0.5)
+    else:
+        plt.axvspan(LINK_PPT_TO_MBPS_CONVERSION*link_ppt_low, LINK_PPT_TO_MBPS_CONVERSION*link_ppt_high,
+                linewidth=0.0, facecolor="0.2", alpha=0.2)
 elif len(link_ppt_priors) > 1:
     print("Multiple link_ppt_priors found, not highlighting on plot.")
 
