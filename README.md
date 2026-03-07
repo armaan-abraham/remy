@@ -1,5 +1,9 @@
 [![Build Status](https://travis-ci.org/tcpexmachina/remy.svg?branch=master)](https://travis-ci.org/tcpexmachina/remy)
 
+# Remy RL
+
+See setupnotes-244c.md
+
 Remy: TCP ex Machina (computer-generated congestion control)
 ============================================================
 
