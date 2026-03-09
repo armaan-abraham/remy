@@ -1,3 +1,5 @@
+#include <torch/torch.h>
+
 #include "ratbrain.hh"
 #include "neuralrat.hh"
 #include "evaluator.hh"
@@ -18,6 +20,7 @@ Evaluator<RatBrain>::Evaluator( const ConfigRange & range )
     _tick_count( range.simulation_ticks ),
     _configs( get_config_outer_product( range ) )
 {
+  torch::set_num_threads( 1 );
 }
 
 template <>
