@@ -1,0 +1,33 @@
+{
+  "args": {
+    "buffer_size": "inf",
+    "cf": "configs/link-10x.cfg",
+    "console_output_files": false,
+    "delay": 150.0,
+    "hidden_size": null,
+    "link_ppt": [
+      0.1,
+      100.0
+    ],
+    "mean_off": 5000.0,
+    "mean_on": 5000.0,
+    "nsenders": 2,
+    "num_hidden_layers": null,
+    "num_points": 99,
+    "originals": "originals",
+    "progress_end_char": "\r",
+    "remycc": [
+      "/iris/u/armaana/remy/10x-2src/cca.42"
+    ],
+    "replot": [],
+    "results_dir": "10x-2src-1-1000-99",
+    "sender": null,
+    "sender_runner": null,
+    "temperature": null
+  },
+  "git": {
+    "describe": "b6e232b-dirty"
+  },
+  "machine-name": "napoli15.stanford.edu",
+  "start-time": "Thu Mar 12 15:35:20 2026"
+}
