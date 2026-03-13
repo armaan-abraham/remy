@@ -14,7 +14,7 @@
 # Constants - Configure these for your specific run
 WORK_DIR="/iris/u/armaana/remy"
 OUTPUT_DIR="20x-2src"
-CONFIG_FILE="link-20x.cfg"
+CONFIG_FILE="configs/link-20x.cfg"
 OUTPUT_PREFIX="cca"
 
 # Change to working directory
