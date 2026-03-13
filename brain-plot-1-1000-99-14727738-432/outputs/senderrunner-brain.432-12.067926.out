@@ -1,0 +1,61 @@
+================================================================================
+This was the console output for the command:
+    /iris/u/armaana/remy-rl/src/sender-runner if=checkpoints-14727738/brain.432 sender=neural nsrc=2 link=12.067926406393289 rtt=150.0 on=5000.0 off=5000.0 buf=inf time=1000.0 cf=configs/link-1x.cfg hidden_size=256 num_hidden_layers=2
+================================================================================
+
+Running neural sender
+Setting num_senders to 2
+Setting link packets per ms to 12.067926
+Setting delay to 150.000000 ms
+Setting mean_on_duration to 5000.000000 ms
+Setting mean_off_duration to 5000.000000 ms
+Prior assumptions:
+link_packets_per_ms {
+  low: 1.5
+  high: 1.5
+  incr: 0
+}
+rtt {
+  low: 150
+  high: 150
+  incr: 0
+}
+num_senders {
+  low: 2
+  high: 2
+  incr: 0
+}
+buffer_size {
+  low: 4294967295
+  high: 4294967295
+  incr: 0
+}
+mean_off_duration {
+  low: 5000
+  high: 5000
+  incr: 0
+}
+mean_on_duration {
+  low: 5000
+  high: 5000
+  incr: 0
+}
+simulation_ticks: 100000
+stochastic_loss_rate {
+  low: 0
+  high: 0
+  incr: 0
+}
+
+
+RatBrain using device: cpu
+Loaded model from checkpoints-14727738/brain.432
+RatBrain using device: cpu
+score = 0.517097
+===
+config: mean_on=5000.000000, mean_off=5000.000000, nsrc=2.000000, link_ppt=12.067926, delay=150.000000, buffer_size=4294967295.000000, stochastic_loss_rate = 0.000000
+
+sender: [tp=0.174616, del=1.000565]
+sender: [tp=0.181405, del=1.000568]
+normalized_score = -4.982092
+Rules: (neural network)

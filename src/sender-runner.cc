@@ -53,6 +53,7 @@ int main( int argc, char *argv[] )
   string config_filename;
   int hidden_size = 128;
   int num_hidden_layers = 2;
+  double temperature = 1.0;
   unsigned int num_senders = 2;
   double link_ppt = 1.0;
   double delay = 100.0;
@@ -103,6 +104,9 @@ int main( int argc, char *argv[] )
       } else {
         buffer_size = atoi( arg.substr( 4 ).c_str() );
       }
+    } else if ( arg.substr( 0, 12 ) == "temperature=" ) {
+      temperature = atof( arg.substr( 12 ).c_str() );
+      fprintf( stderr, "Setting temperature to %f\n", temperature );
     } else if ( arg.substr( 0, 6 ) == "sloss=" ) {
       stochastic_loss_rate = atof( arg.substr( 6 ).c_str() );
       fprintf( stderr, "Setting stochastic loss rate to %f\n", stochastic_loss_rate );
@@ -147,6 +151,7 @@ int main( int argc, char *argv[] )
 
     RatBrain brain( tc );
     brain.load( input_filename );
+    brain.set_temperature( temperature );
 
     Evaluator< RatBrain > eval( configuration_range );
     auto outcome = eval.score( brain, false, 10 );
