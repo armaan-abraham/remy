@@ -24,7 +24,7 @@ NeuralRat::NeuralRat( const NeuralRat & other )
 
 void NeuralRat::update_window_and_intersend()
 {
-  ActionResult result = infer_action( _local_network, _memory, _the_window );
+  ActionResult result = infer_action( _local_network, _memory, _the_window, _brain.temperature() );
   _the_window = result.the_window;
   _intersend_time = result.intersend_time;
   _episode_observations.push_back( result.obs_action );

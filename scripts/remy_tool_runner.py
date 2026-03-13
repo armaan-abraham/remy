@@ -100,6 +100,7 @@ class SenderRunnerRunner(BaseRemyToolRunner):
         ("cf", "cf"),
         ("hidden_size", "hidden_size"),
         ("num_hidden_layers", "num_hidden_layers"),
+        ("temperature", "temperature"),
     ]
 
     COMMAND = os.path.join(ROOTDIR, "src", "sender-runner")

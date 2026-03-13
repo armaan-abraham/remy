@@ -93,8 +93,9 @@ struct PolicyNetImpl : torch::nn::Module {
 
 TORCH_MODULE(PolicyNet);
 
-/* Free function: run inference on any PolicyNet (used by both RatBrain and NeuralRat) */
-ActionResult infer_action( PolicyNet & net, const Memory & memory, int current_window );
+/* Free function: run inference on any PolicyNet (used by both RatBrain and NeuralRat).
+   temperature controls the sharpness of the action distribution (default 1.0). */
+ActionResult infer_action( PolicyNet & net, const Memory & memory, int current_window, double temperature = 1.0 );
 
 class RatBrain {
 private:
@@ -114,11 +115,14 @@ private:
 
   size_t _write_pos;
   size_t _buffer_count;
+  double _temperature = 1.0;
 
 public:
   RatBrain( const TrainingConfig & config = TrainingConfig() );
 
   const PolicyNet & network() const { return _network; }
+  double temperature() const { return _temperature; }
+  void set_temperature( double t ) { _temperature = t; }
   void remember_episode( double utility, const std::vector<ObsAction> & observations, size_t total_rollout_events );
   void learn();
   void save( const std::string & filename ) const;

@@ -109,7 +109,7 @@ RatBrain::RatBrain( const TrainingConfig & config )
   cerr << "RatBrain using device: " << _device << endl;
 }
 
-ActionResult infer_action( PolicyNet & net, const Memory & memory, int current_window )
+ActionResult infer_action( PolicyNet & net, const Memory & memory, int current_window, double temperature )
 {
   torch::NoGradGuard no_grad;
 
@@ -122,9 +122,9 @@ ActionResult infer_action( PolicyNet & net, const Memory & memory, int current_w
 
   /* Forward pass */
   auto output = net->forward( obs_tensor );
-  auto logits_wi = get<0>( output );
-  auto logits_wm = get<1>( output );
-  auto logits_is = get<2>( output );
+  auto logits_wi = get<0>( output ) / temperature;
+  auto logits_wm = get<1>( output ) / temperature;
+  auto logits_is = get<2>( output ) / temperature;
 
   /* Sample from categorical distributions */
   auto probs_wi = torch::softmax( logits_wi, 1 );

@@ -329,6 +329,8 @@ senderrunner_group.add_argument("-w", "--mean-off", type=float, default=1000.0,
     help="Mean off duration (milliseconds)")
 senderrunner_group.add_argument("-b", "--buffer-size", type=str, default="inf",
     help="Buffer size, a number or 'inf' for infinite buffers")
+senderrunner_group.add_argument("--temperature", type=float, default=None,
+    help="Temperature for action distribution sharpness (default 1.0)")
 args = parser.parse_args()
 
 # Sanity-check arguments, warn user say they can stop things early
@@ -366,6 +368,8 @@ if args.hidden_size is not None:
     parameters["hidden_size"] = args.hidden_size
 if args.num_hidden_layers is not None:
     parameters["num_hidden_layers"] = args.num_hidden_layers
+if args.temperature is not None:
+    parameters["temperature"] = args.temperature
 
 remyccfiles = generate_remyccs_list(args.remycc)
 
