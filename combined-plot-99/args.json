@@ -1,0 +1,35 @@
+{
+  "args": {
+    "buffer_size": "inf",
+    "cf": null,
+    "console_output_files": true,
+    "delay": 150.0,
+    "hidden_size": null,
+    "link_ppt": [
+      0.1,
+      100.0
+    ],
+    "mean_off": 1000.0,
+    "mean_on": 1000.0,
+    "nsenders": 2,
+    "num_hidden_layers": null,
+    "num_points": 1000,
+    "originals": "originals",
+    "progress_end_char": "\r",
+    "remycc": [],
+    "replot": [
+      "/iris/u/armaana/remy-rl/brain-plot-1-1000-99-14727738-432",
+      "/iris/u/armaana/remy-rl/1x-2src-1-1000-99",
+      "/iris/u/armaana/remy-rl/10x-2src-1-1000-99"
+    ],
+    "results_dir": "combined-plot-99",
+    "sender": null,
+    "sender_runner": null,
+    "temperature": null
+  },
+  "git": {
+    "describe": "b6e232b-dirty"
+  },
+  "machine-name": "iris-ws-6.stanford.edu",
+  "start-time": "Fri Mar 13 07:12:29 2026"
+}
