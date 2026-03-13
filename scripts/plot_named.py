@@ -36,6 +36,13 @@ class PlotConfig:
         "brain-plot-1-1000-99-14727738-432": "PPO",
         "1x-2src-1-1000-99": "Remy (1x)",
         "10x-2src-1-1000-99": "Remy (10x)",
+        "alphacc_evolved.csv": "AlphaCC"
+    }
+
+    # Mapping from CSV basename to training prior link rate range in ppt (low, high).
+    # Used for the training range annotations at the top of the plot.
+    CSV_PRIOR_RANGES = {
+        "alphacc_evolved.csv": (1.5, 1.5),
     }
 
 REMYCCSPEC_REGEX = re.compile("^([\w/]+)\.\{(\d+)\:(\d+)(?:\:(\d+))?\}$")
@@ -262,6 +269,20 @@ def process_replot_argument(replot_dir, results_dir):
 
     return remyccs, link_ppt_range, console_dir
 
+def plot_from_csv_file(csvfilename, axes, label=None):
+    """Plots data from a CSV file with link_mbps and normalized_score_per_sender columns.
+    Returns the line color."""
+    link_speeds = []
+    norm_scores = []
+    with open(csvfilename, "r") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            link_speeds.append(float(row["link_mbps"]))
+            norm_scores.append(float(row["normalized_score_per_sender"]))
+    plot_label = label if label is not None else os.path.basename(csvfilename)
+    lines = add_plot(axes, link_speeds, norm_scores, label=plot_label)
+    return lines[0].get_color()
+
 def plot_from_original_file(datafilename, axes):
     """Plots data from the file `datafile` to the axes `axes`."""
     link_speeds = []
@@ -402,24 +423,36 @@ link_ppt_priors = generator.get_link_ppt_priors()
 
 # Generate replots
 prior_bars = []  # list of (label, color, prior_low_mbps, prior_high_mbps)
-for replot_dir in args.replot:
-    remyccs, link_ppt_range, outputs_dir = process_replot_argument(replot_dir, results_dirname)
-    replot_basename = os.path.basename(replot_dir.rstrip("/"))
+for replot_path in args.replot:
+    replot_basename = os.path.basename(replot_path.rstrip("/"))
     replot_label = PlotConfig.REPLOT_LEGEND_NAMES.get(replot_basename, None)
-    generator = OutputsDirectoryRemyCCPerformancePlotGenerator(link_ppt_range, outputs_dir,
-            link_ppt_priors=link_ppt_priors, data_dir=data_dirname, axes=ax,
-            progress_end_char=args.progress_end_char)
-    line_color = None
-    for remycc in remyccs:
-        line_color = generator.generate(remycc, label=replot_label)
-    replot_priors = generator.get_link_ppt_priors()
-    if replot_priors and line_color:
-        prior = replot_priors[-1]
-        prior_low_mbps = LINK_PPT_TO_MBPS_CONVERSION * prior[0]
-        prior_high_mbps = LINK_PPT_TO_MBPS_CONVERSION * prior[1]
-        bar_label = replot_label if replot_label else replot_basename
-        prior_bars.append((bar_label, line_color, prior_low_mbps, prior_high_mbps))
-    link_ppt_priors = replot_priors
+
+    if os.path.isfile(replot_path) and replot_path.endswith(".csv"):
+        # Plot from CSV file
+        line_color = plot_from_csv_file(replot_path, ax, label=replot_label)
+        csv_prior = PlotConfig.CSV_PRIOR_RANGES.get(replot_basename, None)
+        if csv_prior and line_color:
+            prior_low_mbps = LINK_PPT_TO_MBPS_CONVERSION * csv_prior[0]
+            prior_high_mbps = LINK_PPT_TO_MBPS_CONVERSION * csv_prior[1]
+            bar_label = replot_label if replot_label else replot_basename
+            prior_bars.append((bar_label, line_color, prior_low_mbps, prior_high_mbps))
+    else:
+        # Plot from directory with sender-runner outputs
+        remyccs, link_ppt_range, outputs_dir = process_replot_argument(replot_path, results_dirname)
+        generator = OutputsDirectoryRemyCCPerformancePlotGenerator(link_ppt_range, outputs_dir,
+                link_ppt_priors=link_ppt_priors, data_dir=data_dirname, axes=ax,
+                progress_end_char=args.progress_end_char)
+        line_color = None
+        for remycc in remyccs:
+            line_color = generator.generate(remycc, label=replot_label)
+        replot_priors = generator.get_link_ppt_priors()
+        if replot_priors and line_color:
+            prior = replot_priors[-1]
+            prior_low_mbps = LINK_PPT_TO_MBPS_CONVERSION * prior[0]
+            prior_high_mbps = LINK_PPT_TO_MBPS_CONVERSION * prior[1]
+            bar_label = replot_label if replot_label else replot_basename
+            prior_bars.append((bar_label, line_color, prior_low_mbps, prior_high_mbps))
+        link_ppt_priors = replot_priors
 
 # Generate original plots
 if os.path.isdir(args.originals):

@@ -20,7 +20,8 @@
     "replot": [
       "/iris/u/armaana/remy-rl/brain-plot-1-1000-99-14727738-432",
       "/iris/u/armaana/remy-rl/1x-2src-1-1000-99",
-      "/iris/u/armaana/remy-rl/10x-2src-1-1000-99"
+      "/iris/u/armaana/remy-rl/10x-2src-1-1000-99",
+      "/iris/u/armaana/remy-rl/alphacc_evolved.csv"
     ],
     "results_dir": "combined-plot-99",
     "sender": null,
@@ -28,8 +29,8 @@
     "temperature": null
   },
   "git": {
-    "describe": "5653a06-dirty"
+    "describe": "82af1e1-dirty"
   },
   "machine-name": "iris-ws-6.stanford.edu",
-  "start-time": "Fri Mar 13 10:06:01 2026"
+  "start-time": "Fri Mar 13 10:24:10 2026"
 }
