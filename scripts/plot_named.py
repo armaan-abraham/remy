@@ -30,7 +30,8 @@ class PlotConfig:
     """Configuration for plot legend names and display settings."""
     # Mapping from replot folder basename to legend name.
     # If a replot directory's basename matches a key here, that name is used in the legend.
-    PLOT_WIDTH_INCHES = 6.75
+    PLOT_WIDTH_INCHES = 4.5
+    PLOT_HEIGHT_INCHES = 4.5
 
     REPLOT_LEGEND_NAMES = {
         "brain-plot-1-1000-99-14727738-432": "PPO",
@@ -411,7 +412,7 @@ if args.temperature is not None:
 
 remyccfiles = generate_remyccs_list(args.remycc)
 
-fig, ax = plt.subplots(figsize=(PlotConfig.PLOT_WIDTH_INCHES, PlotConfig.PLOT_WIDTH_INCHES * 0.75))
+fig, ax = plt.subplots(figsize=(PlotConfig.PLOT_WIDTH_INCHES, PlotConfig.PLOT_HEIGHT_INCHES))
 
 # Generate data and plots (the main part)
 generator = SenderRunnerRemyCCPerformancePlotGenerator(link_ppt_range, parameters,
@@ -474,7 +475,7 @@ if prior_bars:
     trans = blended_transform_factory(ax.transData, ax.transAxes)
     prior_bars.sort(key=lambda x: (-(x[3] - x[2]), x[0]))  # widest first, alphabetical on tie
     bar_height = 0.02  # fraction of axes height per bar
-    bar_gap = 0.008
+    bar_gap = 0.016
     n_prior_bars = len(prior_bars)
     for i, (bar_label, color, low, high) in enumerate(prior_bars):
         y_center = 1.0 + bar_gap + bar_height/2 + i * (bar_height + bar_gap)
